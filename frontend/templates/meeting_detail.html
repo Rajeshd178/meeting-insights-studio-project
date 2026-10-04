@@ -4,12 +4,12 @@
 
 {% block content %}
 <!-- Meeting Header Bar -->
-<div class="glass-card" style="margin-bottom: 24px; padding: 22px 26px;">
-  <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+<div class="glass-card" style="margin-bottom: 16px; padding: 16px 20px;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
     <div>
-      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
         <span class="badge badge-primary">{{ meeting.meetingType }}</span>
-        <span style="font-size: 13px; color: var(--text-subtle);">{{ meeting.meetingDate }}</span>
+        <span style="font-size: 12px; color: var(--text-subtle);">{{ meeting.meetingDate }}</span>
         {% if meeting.confidentialMode %}
         <span class="badge badge-warning">Confidential (PII Redacted)</span>
         {% endif %}
@@ -23,13 +23,13 @@
 
         <!-- Prompt F: Cost Badge -->
         {% if cost_info %}
-        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 700;" title="Duration: {{ cost_info.duration_min }}m x {{ cost_info.attendee_count }} attendees @ {{ cost_info.currency }} {{ cost_info.hourly_rate }}/hr">
+        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 700; font-size: 11px;" title="Duration: {{ cost_info.duration_min }}m x {{ cost_info.attendee_count }} attendees @ {{ cost_info.currency }} {{ cost_info.hourly_rate }}/hr">
           Est. Cost: {{ cost_info.formatted_cost }}
         </span>
         {% endif %}
       </div>
-      <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 6px;">{{ meeting.title }}</h2>
-      <div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-muted); flex-wrap: wrap;">
+      <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">{{ meeting.title }}</h2>
+      <div style="display: flex; gap: 14px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap;">
         <span>⏱️ Duration: {{ (meeting.durationSec // 60)|int }}m {{ (meeting.durationSec % 60)|int }}s</span>
         <span>👥 Speakers: {{ meeting.speakers|length }}</span>
         <span>⚡ Open Tasks: {{ (meeting.tasks|selectattr('status', 'ne', 'done')|list)|length }}</span>

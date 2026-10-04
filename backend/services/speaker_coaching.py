@@ -35,6 +35,25 @@ def compute_speaker_coaching(meeting_id: str) -> List[Dict[str, Any]]:
     cur.execute("SELECT * FROM segments WHERE meeting_id = ? ORDER BY start_sec ASC", (meeting_id,))
     segments = [dict(r) for r in cur.fetchall()]
 
+    if not segments:
+        try:
+            from backend.sample_data import get_initial_meetings
+            from backend.store import store
+            for m in get_initial_meetings():
+                if m["id"] == meeting_id:
+                    store.add_meeting(m)
+                    break
+            cur.execute("SELECT * FROM speakers WHERE meeting_id = ?", (meeting_id,))
+            speakers = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT * FROM segments WHERE meeting_id = ? ORDER BY start_sec ASC", (meeting_id,))
+            segments = [dict(r) for r in cur.fetchall()]
+        except Exception:
+            pass
+
+    if not speakers and segments:
+        unique_spks = sorted(list(set(s.get("speaker_label") for s in segments if s.get("speaker_label"))))
+        speakers = [{"id": f"s-{i}", "label": spk, "display_name": spk} for i, spk in enumerate(unique_spks)]
+
     if not speakers or not segments:
         conn.close()
         return []

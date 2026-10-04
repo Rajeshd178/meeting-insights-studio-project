@@ -361,7 +361,8 @@ class MeetingStore:
             "tasks": tasks,
             "insights": insights,
             "questions": questions,
-            "analytics": analytics
+            "analytics": analytics,
+            "chatMessages": self.get_chat_messages(m_id)
         }
 
     def add_meeting(self, meeting: Dict[str, Any]):
@@ -731,6 +732,57 @@ class MeetingStore:
             "formattedMeetingCost": f"₹{total_meeting_cost:,.0f}",
             "avgHealth": avg_health
         }
+
+    def add_chat_message(self, meeting_id: str, role: str, content: str, citations: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        msg_id = f"msg-{uid()}"
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        citations_json = json.dumps(citations or [])
+        cur.execute("""
+        INSERT INTO chat_messages (id, meeting_id, role, content, citations_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (msg_id, meeting_id, role, content, citations_json, now))
+        conn.commit()
+        conn.close()
+        return {
+            "id": msg_id,
+            "meetingId": meeting_id,
+            "role": role,
+            "content": content,
+            "citations": citations or [],
+            "createdAt": now
+        }
+
+    def get_chat_messages(self, meeting_id: str) -> List[Dict[str, Any]]:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Ensure chat_messages table exists in case init_db hasn't run on existing db
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            meeting_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            citations_json TEXT DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+        )
+        """)
+        cur.execute("SELECT * FROM chat_messages WHERE meeting_id = ? ORDER BY created_at ASC", (meeting_id,))
+        rows = cur.fetchall()
+        messages = []
+        for r in rows:
+            messages.append({
+                "id": r["id"],
+                "meetingId": r["meeting_id"],
+                "role": r["role"],
+                "content": r["content"],
+                "citations": json.loads(r["citations_json"]) if r["citations_json"] else [],
+                "createdAt": r["created_at"]
+            })
+        conn.close()
+        return messages
 
 
 store = MeetingStore()

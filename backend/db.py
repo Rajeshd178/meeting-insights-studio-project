@@ -298,6 +298,19 @@ def init_db(db_path: Optional[str] = None):
     )
     """)
 
+    # 16. Chat Messages Table
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        meeting_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        citations_json TEXT DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+    )
+    """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS llm_calls (
         id TEXT PRIMARY KEY,

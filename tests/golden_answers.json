@@ -1,0 +1,41 @@
+{
+  "tasks": [
+    {
+      "id": "t1-1",
+      "title": "Send updated API schema by Friday 5 PM",
+      "expected_strength": "firm"
+    },
+    {
+      "id": "t1-2",
+      "title": "Maybe look into the caching latency",
+      "expected_strength": "soft"
+    },
+    {
+      "id": "t1-3",
+      "title": "Someone should check the deployment logs at some point",
+      "expected_strength": "vague"
+    }
+  ],
+  "questions": [
+    {
+      "question": "Can we support 50k concurrent users?",
+      "expected_status": "answered"
+    },
+    {
+      "question": "Who will run the load testing?",
+      "expected_status": "unanswered"
+    }
+  ],
+  "quotes": [
+    {
+      "quote": "Let's make sure the client endpoints return proper error codes.",
+      "transcript_sample": "Let's make sure the client endpoints return proper error codes so we don't leak internals.",
+      "should_pass": true
+    },
+    {
+      "quote": "We will immediately switch our entire backend to Rust next week.",
+      "transcript_sample": "Let's make sure the client endpoints return proper error codes so we don't leak internals.",
+      "should_pass": false
+    }
+  ]
+}

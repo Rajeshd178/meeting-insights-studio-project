@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block page_title %}Compare Meetings{% endblock %}
+{% block page_title_inner %}Cross-Meeting Differential Comparison{% endblock %}
+
+{% block content %}
+<div class="compare-page-wrapper" style="display: flex; flex-direction: column; gap: 20px;">
+  
+  <!-- Selection Card -->
+  <div class="card" style="padding: 20px 24px;">
+    <form method="GET" action="{{ url_for('compare_page') }}" style="display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+        <div>
+          <label for="compare-a" style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Baseline Meeting (A):</label>
+          <select id="compare-a" name="a" class="form-select" style="width: 260px; font-size: 13px;">
+            {% for m in meetings %}
+              <option value="{{ m.id }}" {% if m.id == a_id %}selected{% endif %}>{{ m.title }} ({{ m.meetingDate }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="font-size: 18px; color: var(--text-subtle); padding-top: 18px;">⟷</div>
+        <div>
+          <label for="compare-b" style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Subsequent Meeting (B):</label>
+          <select id="compare-b" name="b" class="form-select" style="width: 260px; font-size: 13px;">
+            {% for m in meetings %}
+              <option value="{{ m.id }}" {% if m.id == b_id %}selected{% endif %}>{{ m.title }} ({{ m.meetingDate }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top: 16px;">
+        Compare Differences
+      </button>
+    </form>
+  </div>
+
+  <!-- Narrative Summary Card -->
+  {% if comp %}
+  <div class="card" style="padding: 20px 24px; border-left: 4px solid var(--primary);">
+    <h3 style="font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">Executive Evolution Narrative</h3>
+    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+      {{ comp.narrative or "Comparison generated using dense embeddings and structural diff alignment." }}
+    </p>
+  </div>
+
+  <!-- Comparison Grids -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+    
+    <!-- Decisions Diff -->
+    <div class="card" style="padding: 20px;">
+      <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between;">
+        <span>Decisions</span>
+        <span class="badge badge-info" style="font-size: 11px;">{{ (comp.decisions_diff.new|length) + (comp.decisions_diff.modified|length) }} changes</span>
+      </h3>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        {% for d in comp.decisions_diff.new %}
+          <div style="font-size: 13px; background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; padding: 8px 12px; border-radius: 4px;">
+            <span style="font-size: 11px; font-weight: 700; color: #10b981; text-transform: uppercase;">NEW:</span> {{ d }}
+          </div>
+        {% endfor %}
+        {% for d in comp.decisions_diff.modified %}
+          <div style="font-size: 13px; background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 8px 12px; border-radius: 4px;">
+            <span style="font-size: 11px; font-weight: 700; color: #f59e0b; text-transform: uppercase;">CHANGED:</span> {{ d }}
+          </div>
+        {% endfor %}
+        {% if not comp.decisions_diff.new and not comp.decisions_diff.modified %}
+          <div style="color: var(--text-muted); font-size: 13px;">No new or modified decisions identified.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Tasks Diff -->
+    <div class="card" style="padding: 20px;">
+      <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between;">
+        <span>Action Items</span>
+        <span class="badge badge-info" style="font-size: 11px;">{{ (comp.tasks_diff.new|length) + (comp.tasks_diff.modified|length) }} updates</span>
+      </h3>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        {% for t in comp.tasks_diff.new %}
+          <div style="font-size: 13px; background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; padding: 8px 12px; border-radius: 4px;">
+            <span style="font-size: 11px; font-weight: 700; color: #10b981; text-transform: uppercase;">NEW TASK:</span> {{ t }}
+          </div>
+        {% endfor %}
+        {% for t in comp.tasks_diff.modified %}
+          <div style="font-size: 13px; background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 8px 12px; border-radius: 4px;">
+            <span style="font-size: 11px; font-weight: 700; color: #f59e0b; text-transform: uppercase;">REVISED:</span> {{ t }}
+          </div>
+        {% endfor %}
+        {% if not comp.tasks_diff.new and not comp.tasks_diff.modified %}
+          <div style="color: var(--text-muted); font-size: 13px;">No action item deltas recorded.</div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

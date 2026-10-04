@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block page_title %}Weekly Leadership Digest{% endblock %}
+{% block page_title_inner %}Cross-Meeting Leadership Digest & Alignment Brief{% endblock %}
+
+{% block content %}
+<div class="digest-page-wrapper" style="display: flex; flex-direction: column; gap: 20px;">
+  
+  <!-- Date Filter & Actions Card -->
+  <div class="card" style="padding: 18px 24px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
+    <form method="GET" action="{{ url_for('digest_page') }}" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="digest-start" style="font-size: 13px; color: var(--text-muted);">From:</label>
+        <input type="date" id="digest-start" name="start" value="{{ start_date }}" class="form-input" style="padding: 6px 10px; font-size: 13px;">
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="digest-end" style="font-size: 13px; color: var(--text-muted);">To:</label>
+        <input type="date" id="digest-end" name="end" value="{{ end_date }}" class="form-input" style="padding: 6px 10px; font-size: 13px;">
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Generate Digest</button>
+    </form>
+
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button id="copy-digest-btn" class="btn btn-secondary btn-sm" onclick="copyDigestText()">
+        📋 Copy Markdown
+      </button>
+      <a href="/api/digest?start={{ start_date }}&end={{ end_date }}" target="_blank" class="btn btn-secondary btn-sm">
+        API JSON
+      </a>
+    </div>
+  </div>
+
+  <!-- Digest Content Card -->
+  <div class="card" id="digest-container" style="padding: 28px; line-height: 1.6;">
+    <div style="border-bottom: 1px solid var(--border-subtle); padding-bottom: 16px; margin-bottom: 20px;">
+      <span class="badge badge-info" style="font-size: 11px; margin-bottom: 8px;">EXECUTIVE SYNC</span>
+      <h2 style="font-size: 22px; font-weight: 800; color: var(--text-main);">Weekly Leadership Intelligence Brief</h2>
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+        Synthesized across <strong>{{ digest.meeting_count or 0 }} meetings</strong> between {{ start_date }} and {{ end_date }}.
+      </p>
+    </div>
+
+    <!-- Highlights -->
+    <div style="margin-bottom: 24px;">
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>🎯 Key Strategic Highlights</span>
+      </h3>
+      <ul style="padding-left: 20px; color: var(--text-main); font-size: 14px; display: flex; flex-direction: column; gap: 8px;">
+        {% for h in digest.highlights %}
+          <li>{{ h }}</li>
+        {% else %}
+          <li style="color: var(--text-muted);">No key highlights recorded for this period.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- Key Decisions -->
+    <div style="margin-bottom: 24px;">
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>⚖️ Formal Decisions Finalized</span>
+      </h3>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        {% for d in digest.key_decisions %}
+          <div style="background: var(--bg-surface-elevated); padding: 12px 16px; border-radius: var(--radius-md); border-left: 3px solid var(--success); font-size: 13px;">
+            <strong style="color: var(--text-main);">{{ d.text or d }}</strong>
+            {% if d.rationale %}
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Rationale: {{ d.rationale }}</div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div style="color: var(--text-muted); font-size: 13px;">No decisions in this timeframe.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- At-Risk Commitments -->
+    <div style="margin-bottom: 24px;">
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>⚠️ At-Risk Commitments (Soft or Vague)</span>
+      </h3>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        {% for c in digest.at_risk_commitments %}
+          <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-surface); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-size: 13px;">
+            <span style="color: var(--text-main);">{{ c.title or c.task }}</span>
+            <span class="commitment-chip {{ c.strength or 'soft' }}">{{ c.strength or 'soft' }}</span>
+          </div>
+        {% else %}
+          <div style="color: var(--text-muted); font-size: 13px;">All commitments are currently firm.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Upcoming Deadlines -->
+    <div>
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>📅 Upcoming Deadlines</span>
+      </h3>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        {% for item in digest.upcoming_deadlines %}
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; padding: 8px 12px; background: var(--bg-surface); border-radius: var(--radius-sm);">
+            <span>{{ item.task }} <span style="color: var(--text-muted);">({{ item.owner or 'Unassigned' }})</span></span>
+            <span style="font-weight: 600; color: var(--accent);">{{ item.deadline }}</span>
+          </div>
+        {% else %}
+          <div style="color: var(--text-muted); font-size: 13px;">No near-term deadlines tracked.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+function copyDigestText() {
+  const container = document.getElementById('digest-container');
+  if (!container) return;
+  navigator.clipboard.writeText(container.innerText).then(() => {
+    showToast('Digest copied to clipboard!', 'success');
+  });
+}
+</script>
+{% endblock %}

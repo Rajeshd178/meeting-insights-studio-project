@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block page_title %}Cost & Model Usage{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(16, 185, 129, 0.15); color: var(--success);">💲</div>
+    <div class="stat-info">
+      <div class="stat-label">Total Cost</div>
+      <div class="stat-value">${{ '%.4f' % stats.totalCost }}</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(99, 102, 241, 0.15); color: var(--primary);">⚡</div>
+    <div class="stat-info">
+      <div class="stat-label">LLM Calls</div>
+      <div class="stat-value">{{ calls|length }}</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(6, 182, 212, 0.15); color: var(--accent);">📥</div>
+    <div class="stat-info">
+      <div class="stat-label">Tokens In</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.tokensIn) }}</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">📤</div>
+    <div class="stat-info">
+      <div class="stat-label">Tokens Out</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.tokensOut) }}</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(255, 255, 255, 0.08); color: var(--text-main);">⏱️</div>
+    <div class="stat-info">
+      <div class="stat-label">Avg Latency</div>
+      <div class="stat-value">{{ stats.avgLatency }}ms</div>
+    </div>
+  </div>
+</div>
+
+<!-- Cost by Model & Task -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+  <div class="glass-card">
+    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Cost by Model (The 3 Models)</h4>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      {% for model, data in stats.byModel.items() %}
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+          <span><code>{{ model }}</code></span>
+          <span><strong>${{ '%.4f' % data.cost }}</strong> ({{ data.calls }} calls)</span>
+        </div>
+        <div style="height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;">
+          <div style="width: {{ (data.cost / (stats.totalCost or 1.0) * 100)|int }}%; height: 100%; background: var(--accent);"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="glass-card">
+    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Cost by Task</h4>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      {% for task, data in stats.byTask.items() %}
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+          <span style="text-transform: capitalize;"><strong>{{ task }}</strong></span>
+          <span><strong>${{ '%.4f' % data.cost }}</strong> ({{ data.avgLatency }}ms avg)</span>
+        </div>
+        <div style="height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;">
+          <div style="width: {{ (data.cost / (stats.totalCost or 1.0) * 100)|int }}%; height: 100%; background: var(--primary);"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Recent Calls Log -->
+<div class="glass-card">
+  <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Recent LLM Calls Audit Trail</h4>
+  <div style="overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <thead>
+        <tr style="border-bottom: 1px solid var(--border-subtle); text-align: left; color: var(--text-subtle);">
+          <th style="padding: 10px 8px;">Task</th>
+          <th style="padding: 10px 8px;">Model</th>
+          <th style="padding: 10px 8px;">Tokens In</th>
+          <th style="padding: 10px 8px;">Tokens Out</th>
+          <th style="padding: 10px 8px;">Cost</th>
+          <th style="padding: 10px 8px;">Latency</th>
+          <th style="padding: 10px 8px;">Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in calls|reverse %}
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+          <td style="padding: 10px 8px; text-transform: capitalize;"><strong>{{ c.task }}</strong></td>
+          <td style="padding: 10px 8px;"><code>{{ c.model }}</code></td>
+          <td style="padding: 10px 8px; color: var(--text-muted);">{{ c.tokensIn }}</td>
+          <td style="padding: 10px 8px; color: var(--text-muted);">{{ c.tokensOut }}</td>
+          <td style="padding: 10px 8px; color: var(--success);">${{ '%.5f' % c.costUsd }}</td>
+          <td style="padding: 10px 8px; color: var(--text-muted);">{{ c.latencyMs }}ms</td>
+          <td style="padding: 10px 8px; color: var(--text-subtle);">{{ c.createdAt[-8:] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

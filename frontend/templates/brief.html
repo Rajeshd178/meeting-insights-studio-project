@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block page_title %}Pre-meeting Brief{% endblock %}
+{% block page_heading %}Pre-meeting Strategic Brief{% endblock %}
+
+{% block content %}
+<div style="max-width: 980px; margin: 0 auto;">
+  <!-- Brief Header & Controls -->
+  <div class="glass-card" style="margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 16px;">
+      <div>
+        <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 4px;">Pre-meeting Intelligence & Agenda Brief</h3>
+        <p style="font-size: 13px; color: var(--text-muted);">
+          Compiled automatically from past transcripts, open tasks, unfulfilled commitments, and key decisions.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button id="copy-brief-btn" class="btn btn-secondary btn-sm" title="Copy full brief to clipboard">
+          📋 Copy Brief
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="window.print()">
+          🖨️ Print / PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Context Selector Filter (Meeting or Tag) -->
+    <div class="brief-filter-bar" style="display: flex; gap: 14px; flex-wrap: wrap; background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); align-items: center;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="brief-meeting-select" style="font-size: 12.5px; font-weight: 600; color: var(--text-muted);">Meeting Context:</label>
+        <select id="brief-meeting-select" class="toolbar-select" onchange="window.location.href='/brief?meeting_id=' + this.value">
+          <option value="">-- All Workspace Meetings --</option>
+          {% for m in all_meetings %}
+          <option value="{{ m.id }}" {% if selected_meeting and selected_meeting.id == m.id %}selected{% endif %}>
+            {{ m.title }} ({{ m.meetingDate }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="brief-tag-select" style="font-size: 12.5px; font-weight: 600; color: var(--text-muted);">Or by Tag / Series:</label>
+        <select id="brief-tag-select" class="toolbar-select" onchange="window.location.href='/brief?tag=' + this.value">
+          <option value="">-- All Tags --</option>
+          {% for tg in all_tags %}
+          <option value="{{ tg }}" {% if selected_tag == tg %}selected{% endif %}>
+            #{{ tg }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="brief-content-wrapper">
+    <!-- Active Context Header Banner -->
+    <div class="glass-card" style="margin-bottom: 20px; border-left: 4px solid var(--primary); background: rgba(99, 102, 241, 0.05); padding: 16px 20px;">
+      <h4 style="font-size: 15px; font-weight: 700; color: #a5b4fc; margin-bottom: 6px;">
+        Executive Brief Context: {{ selected_meeting.title if selected_meeting else 'Cross-Meeting Rollup' }}
+      </h4>
+      <p style="font-size: 13.5px; line-height: 1.6; color: var(--text-main);">
+        {% if selected_meeting and selected_meeting.summary %}
+          {{ selected_meeting.summary.tldr }}
+        {% else %}
+          Prior decisions indicate an engineering focus on enterprise analytics deliverables. Cross-team collaboration between product and QA is required to resolve concurrent stability concerns prior to client milestone reviews.
+        {% endif %}
+      </p>
+    </div>
+
+    <!-- 1. Overdue Items (Warning Banner) -->
+    {% if overdue_tasks %}
+    <div class="glass-card" style="margin-bottom: 20px; border-left: 4px solid var(--error); background: rgba(239, 68, 68, 0.05);">
+      <h4 style="font-size: 15px; font-weight: 700; color: var(--error); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>⚠️ Overdue Items & Past Commitments</span>
+        <span class="badge badge-error">{{ overdue_tasks|length }} Overdue</span>
+      </h4>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        {% for ot in overdue_tasks %}
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm);">
+          <div>
+            <strong style="font-size: 13.5px; color: var(--text-main);">{{ ot.title }}</strong>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+              Assigned to: <strong>{{ ot.owner }}</strong> &bull; Past Due: <span class="text-error" style="font-weight: 600;">{{ ot.deadline }}</span>
+            </div>
+          </div>
+          <span class="badge badge-error">Action Required</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 2. Unresolved Action Items -->
+    <div class="glass-card" style="margin-bottom: 20px;">
+      <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>⚡ Unresolved Action Items</span>
+        <span class="badge badge-warning">{{ unresolved_tasks|length }} Open</span>
+      </h4>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        {% for t in unresolved_tasks %}
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div>
+            <div style="font-size: 13.5px; font-weight: 600; color: var(--text-main);">{{ t.title }}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+              Owner: <strong>{{ t.owner }}</strong> &nbsp;|&nbsp; Deadline: <strong>{{ t.deadline or t.deadlineRaw or 'Unscheduled' }}</strong>
+            </div>
+          </div>
+          <span class="badge {% if t.priority == 'high' %}badge-error{% elif t.priority == 'medium' %}badge-warning{% else %}badge-neutral{% endif %}">
+            {{ t.priority|title }}
+          </span>
+        </div>
+        {% else %}
+        <p style="font-size: 13px; color: var(--text-muted);">No open action items pending.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 3. Last Decisions Logged -->
+    <div class="glass-card" style="margin-bottom: 20px;">
+      <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>🎯 Established Decisions to Respect</span>
+        <span class="badge badge-success">{{ decisions|length }} Logged</span>
+      </h4>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        {% for d in decisions %}
+        <div style="padding: 12px 14px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); border-left: 3px solid var(--success);">
+          <div style="font-size: 14px; font-weight: 600; color: var(--text-main); margin-bottom: 4px;">{{ d.text }}</div>
+          <div style="font-size: 12px; color: var(--text-muted);">
+            Decided By: <strong>{{ d.decidedBy }}</strong> &bull; Rationale: <em>{{ d.rationale }}</em>
+          </div>
+        </div>
+        {% else %}
+        <p style="font-size: 13px; color: var(--text-muted);">No recorded decisions in this scope.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 4. Open Questions & Ambiguities -->
+    <div class="glass-card" style="margin-bottom: 20px;">
+      <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>❓ Open Questions to Clarify</span>
+      </h4>
+      <ul style="padding-left: 20px; font-size: 13.5px; line-height: 1.7; color: var(--text-main);">
+        {% for q in open_questions %}
+        <li>{{ q }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- 5. Suggested Meeting Agenda -->
+    <div class="glass-card" style="margin-bottom: 20px;">
+      <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+        <span>⏱️ Suggested Meeting Agenda (50 min)</span>
+      </h4>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        {% for ag in agenda %}
+        <div style="display: flex; align-items: center; gap: 16px; padding: 10px 14px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm);">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); min-width: 60px;">{{ ag.time }}</span>
+          <div style="flex: 1; font-size: 13.5px; font-weight: 500; color: var(--text-main);">{{ ag.topic }}</div>
+          <span class="badge badge-neutral" style="font-size: 11px;">{{ ag.owner }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block page_title %}Live Meeting Mode{% endblock %}
+{% block page_title_inner %}Live Meeting Recording & Intelligence{% endblock %}
+
+{% block content %}
+<div class="live-page-wrapper" style="display: flex; flex-direction: column; gap: 20px;">
+  
+  <!-- Live Controls Top Bar -->
+  <div class="card" style="padding: 16px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; flex: 1;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span id="live-rec-dot" class="rec-pulse" style="display: none;"></span>
+        <input type="text" id="live-session-title" class="form-input" style="width: 260px; font-weight: 600;" value="Live Strategy Sync" placeholder="Meeting Title...">
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="live-session-lang" style="font-size: 13px; color: var(--text-muted);">Language:</label>
+        <select id="live-session-lang" class="form-select" style="width: 110px; padding: 6px 10px; font-size: 13px;">
+          <option value="en" selected>English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="hi">Hindi</option>
+        </select>
+      </div>
+      <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none;">
+        <input type="checkbox" id="live-confidential-mode">
+        <span>Confidential Mode (PII Redacted)</span>
+      </label>
+    </div>
+
+    <!-- Live Audio Level Meter & Time -->
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div style="width: 120px;" title="Microphone Input Level (RMS)">
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;">
+          <span>Mic Input</span>
+          <span id="mic-level-label">0%</span>
+        </div>
+        <div class="audio-meter-bar">
+          <div id="audio-meter-fill" class="audio-meter-fill"></div>
+        </div>
+      </div>
+
+      <div style="text-align: right; min-width: 90px;">
+        <div style="font-size: 11px; color: var(--text-muted);">Elapsed</div>
+        <div id="live-timer" style="font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--text-main);">00:00</div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button id="live-start-btn" class="btn btn-primary" style="background: #ef4444; border-color: #ef4444;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+          <span>Start Recording</span>
+        </button>
+        <button id="live-pause-btn" class="btn btn-secondary" style="display: none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          <span>Pause</span>
+        </button>
+        <button id="live-stop-btn" class="btn btn-secondary" style="display: none; border-color: #ef4444; color: #ef4444;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+          <span>Stop & Analyze</span>
+        </button>
+        <button id="live-sim-btn" class="btn btn-secondary" title="Replay demo live chunks without microphone">
+          <span>▶️ Demo Simulation</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quota & Session Meter Notice -->
+  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); padding: 0 4px;">
+    <div>
+      <span id="session-status-badge" class="badge" style="background: rgba(255,255,255,0.06);">Idle</span>
+      <span style="margin-left: 8px;">Chunks Processed: <strong id="chunk-counter" style="color: var(--text-main);">0</strong>/120</span>
+      <span style="margin-left: 12px;">Model Quota: <strong style="color: var(--success);">Optimal</strong></span>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <span id="ssl-notice" style="color: var(--text-subtle);">Running securely on local host context</span>
+    </div>
+  </div>
+
+  <!-- Live Grid Layout: Rolling Captions Left, Intelligence Right -->
+  <div class="live-grid">
+    
+    <!-- Left Column: Rolling Captions -->
+    <div class="live-captions-box">
+      <div style="padding: 14px 20px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+          <h3 style="font-size: 15px; font-weight: 700; margin: 0;">Rolling Live Captions</h3>
+        </div>
+        <div style="font-size: 12px; color: var(--text-subtle);">
+          Auto-scroll: <span id="autoscroll-status" style="color: var(--success); font-weight: 600;">Active</span>
+        </div>
+      </div>
+
+      <div id="live-captions-container" class="live-captions-scroll">
+        <div id="live-placeholder-empty" style="text-align: center; color: var(--text-muted); margin: auto; padding: 40px 20px;">
+          <div style="font-size: 36px; margin-bottom: 12px;">🎙️</div>
+          <p style="font-size: 15px; font-weight: 600; color: var(--text-main);">Waiting to Start Recording</p>
+          <p style="font-size: 13px; max-width: 380px; margin: 6px auto 0;">Click <strong>Start Recording</strong> to stream microphone chunks via gpt-4o-transcribe-diarize, or click <strong>Demo Simulation</strong> for instant safe replay.</p>
+        </div>
+      </div>
+      
+      <div style="padding: 8px 16px; background: rgba(0,0,0,0.2); border-top: 1px solid var(--border-subtle); font-size: 11px; color: var(--text-subtle); display: flex; justify-content: space-between;">
+        <span>Speaker labels approximate during live session. Refined automatically upon stop.</span>
+        <span id="live-word-count">0 words</span>
+      </div>
+    </div>
+
+    <!-- Right Column: Intelligence Panels -->
+    <div class="live-panel-right">
+      
+      <!-- Panel 1: Incremental Running Summary -->
+      <div class="card" style="padding: 18px; flex: 1; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 6px;">
+          <h3 style="font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; margin: 0;">
+            <span>🧠 Running Summary</span>
+          </h3>
+          <div style="display: flex; gap: 6px;">
+            <button id="live-tts-btn" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 11px;">
+              🔊 Read Aloud (TTS)
+            </button>
+            <button id="live-catchup-btn" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 11px;">
+              ⚡ Catch Me Up
+            </button>
+          </div>
+        </div>
+        <div id="live-summary-bullets" style="font-size: 13px; color: var(--text-muted); line-height: 1.5; flex: 1; overflow-y: auto;">
+          <p style="color: var(--text-subtle); font-style: italic;">Rolling summary updates automatically every minute...</p>
+        </div>
+      </div>
+
+      <!-- Panel 2: Tentative Live Action Items -->
+      <div class="card" style="padding: 18px; flex: 1; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+            <span>📋 Tentative Action Items</span>
+          </h3>
+          <span id="tentative-count" class="badge badge-info" style="font-size: 11px;">0 items</span>
+        </div>
+        <div id="live-tentative-items" style="display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; max-height: 220px;">
+          <p style="color: var(--text-subtle); font-size: 13px; font-style: italic;">Action items detected in real-time will appear here...</p>
+        </div>
+      </div>
+
+      <!-- Panel 3: Live Stats (Speaking Balance) -->
+      <div class="card" style="padding: 16px;">
+        <h3 style="font-size: 13px; font-weight: 700; margin-bottom: 10px;">Live Speaker Balance</h3>
+        <div id="live-speaker-bars" style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 12px; color: var(--text-subtle);">Awaiting initial audio segments...</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

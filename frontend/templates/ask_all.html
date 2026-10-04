@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block page_title %}Ask All Meetings{% endblock %}
+
+{% block content %}
+<div style="max-width: 1000px; margin: 0 auto;">
+  <div class="glass-card" style="margin-bottom: 24px;">
+    <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 6px;">Cross-Meeting Intelligence Engine</h3>
+    <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 18px;">
+      Query across all meetings simultaneously. The RAG engine computes semantic similarity across all meetings using 
+      <strong>{{ config_info.embedding_model }}</strong> and synthesizes unified multi-meeting responses with citations via 
+      <strong>{{ config_info.chat_model }}</strong>.
+    </p>
+
+    <!-- Quick prompt pills -->
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
+      <button class="btn btn-secondary btn-sm prompt-pill" data-prompt="What are all overdue or pending action items across meetings?">📋 Pending Action Items</button>
+      <button class="btn btn-secondary btn-sm prompt-pill" data-prompt="What key decisions were made across all projects?">🎯 Cross-Project Decisions</button>
+      <button class="btn btn-secondary btn-sm prompt-pill" data-prompt="What are the main risks and blockers discussed?">⚠️ Identified Risks</button>
+      <button class="btn btn-secondary btn-sm prompt-pill" data-prompt="What was discussed about the analytics platform?">📊 Analytics Platform</button>
+    </div>
+
+    <!-- Chat Box -->
+    <div class="chat-box" style="height: 520px;">
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-bubble assistant">
+          Hello! I can answer questions across your entire meeting history. What would you like to know?
+        </div>
+      </div>
+
+      <form class="chat-input-bar" id="chat-form">
+        <input type="text" id="chat-input" placeholder="Ask anything across all meetings..." required autocomplete="off">
+        <button type="submit" class="btn btn-primary">Query All</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.prompt-pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const prompt = btn.getAttribute('data-prompt');
+    const input = document.getElementById('chat-input');
+    input.value = prompt;
+    document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+  });
+});
+</script>
+{% endblock %}

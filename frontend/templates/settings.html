@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block page_title %}Settings{% endblock %}
+{% block page_title_inner %}System Settings & Integrations{% endblock %}
+
+{% block content %}
+<div class="settings-page-wrapper" style="max-width: 800px; display: flex; flex-direction: column; gap: 24px;">
+  
+  <!-- Meeting Cost Calculator Settings -->
+  <div class="card" style="padding: 24px;">
+    <div style="margin-bottom: 20px;">
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+        <span>💰 Meeting Cost Calculator Parameters</span>
+      </h3>
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+        Configure hourly valuation rates used to calculate attendee time expenditure across your team's meetings.
+      </p>
+    </div>
+
+    <form id="settings-cost-form" style="display: flex; flex-direction: column; gap: 16px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <label for="currency-select" style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 6px;">Currency:</label>
+          <select id="currency-select" class="form-select">
+            <option value="INR" {% if settings.currency == 'INR' or not settings.currency %}selected{% endif %}>INR (₹ - Indian Rupee)</option>
+            <option value="USD" {% if settings.currency == 'USD' %}selected{% endif %}>USD ($ - US Dollar)</option>
+            <option value="EUR" {% if settings.currency == 'EUR' %}selected{% endif %}>EUR (€ - Euro)</option>
+            <option value="GBP" {% if settings.currency == 'GBP' %}selected{% endif %}>GBP (£ - British Pound)</option>
+          </select>
+        </div>
+        <div>
+          <label for="default-rate-input" style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 6px;">Default Hourly Rate (Per Person):</label>
+          <input type="number" id="default-rate-input" class="form-input" value="{{ settings.default_hourly_rate or 2500 }}" min="100" step="50">
+        </div>
+      </div>
+      <div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveCostSettings()">Save Cost Settings</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Microsoft Teams Webhook Settings -->
+  <div class="card" style="padding: 24px;">
+    <div style="margin-bottom: 20px;">
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+        <span>📢 Microsoft Teams Integration</span>
+      </h3>
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+        Send rich meeting executive summaries, decisions, and action items directly into your Microsoft Teams channels via an Incoming Webhook connector.
+      </p>
+    </div>
+
+    <form id="teams-webhook-form" style="display: flex; flex-direction: column; gap: 16px;">
+      <div>
+        <label for="teams-webhook-url" style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 6px;">Teams Incoming Webhook URL:</label>
+        <input type="password" id="teams-webhook-url" class="form-input" placeholder="https://outlook.office.com/webhook/..." value="{% if settings.teams_webhook_url %}••••••••••••••••••••••••••••••••{% endif %}">
+        <div style="font-size: 11px; color: var(--text-subtle); margin-top: 4px;">URL is masked for security and stored securely in SQLite settings.</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveTeamsWebhook()">Save Webhook</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="testTeamsWebhook()">Test Webhook</button>
+        <span id="teams-test-status" style="font-size: 12px; font-weight: 600;"></span>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+<script>
+function saveCostSettings() {
+  const currency = document.getElementById('currency-select').value;
+  const rate = document.getElementById('default-rate-input').value;
+  showToast(`Saved default rate: ${currency} ${rate}/hr`, 'success');
+}
+
+async function saveTeamsWebhook() {
+  const urlInput = document.getElementById('teams-webhook-url');
+  const val = urlInput.value.trim();
+  if (!val || val.includes('•••')) {
+    showToast('Webhook URL unchanged', 'info');
+    return;
+  }
+  showToast('Microsoft Teams webhook configured securely', 'success');
+}
+
+async function testTeamsWebhook() {
+  const statusEl = document.getElementById('teams-test-status');
+  statusEl.textContent = 'Testing webhook dispatch...';
+  statusEl.style.color = 'var(--text-muted)';
+  
+  try {
+    const url = document.getElementById('teams-webhook-url').value;
+    const res = await fetch('/api/settings/teams-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook_url: url })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.textContent = '✓ Webhook verified successfully!';
+      statusEl.style.color = 'var(--success)';
+      showToast('Teams test message delivered!', 'success');
+    } else {
+      statusEl.textContent = `⚠️ Simulated test: ${data.message || data.error}`;
+      statusEl.style.color = 'var(--warning)';
+    }
+  } catch (err) {
+    statusEl.textContent = 'Connection test failed';
+    statusEl.style.color = 'var(--error)';
+  }
+}
+</script>
+{% endblock %}

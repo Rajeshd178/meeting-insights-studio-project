@@ -1,0 +1,734 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ meeting.title }}{% endblock %}
+
+{% block content %}
+<!-- Meeting Header Bar -->
+<div class="glass-card" style="margin-bottom: 24px; padding: 22px 26px;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;">
+        <span class="badge badge-primary">{{ meeting.meetingType }}</span>
+        <span style="font-size: 13px; color: var(--text-subtle);">{{ meeting.meetingDate }}</span>
+        {% if meeting.confidentialMode %}
+        <span class="badge badge-warning">Confidential (PII Redacted)</span>
+        {% endif %}
+        
+        <!-- Prompt F: Value Score Badge -->
+        {% if value_score %}
+        <span class="value-score-badge {{ value_score.verdict_class }}" title="{{ value_score.reason }}">
+          {{ value_score.verdict }} (Value Score: {{ value_score.score }}/100)
+        </span>
+        {% endif %}
+
+        <!-- Prompt F: Cost Badge -->
+        {% if cost_info %}
+        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 700;" title="Duration: {{ cost_info.duration_min }}m x {{ cost_info.attendee_count }} attendees @ {{ cost_info.currency }} {{ cost_info.hourly_rate }}/hr">
+          Est. Cost: {{ cost_info.formatted_cost }}
+        </span>
+        {% endif %}
+      </div>
+      <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 6px;">{{ meeting.title }}</h2>
+      <div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-muted); flex-wrap: wrap;">
+        <span>⏱️ Duration: {{ (meeting.durationSec // 60)|int }}m {{ (meeting.durationSec % 60)|int }}s</span>
+        <span>👥 Speakers: {{ meeting.speakers|length }}</span>
+        <span>⚡ Open Tasks: {{ (meeting.tasks|selectattr('status', 'ne', 'done')|list)|length }}</span>
+        <span>🎯 Decisions: {{ meeting.decisions|length }}</span>
+      </div>
+    </div>
+
+    <!-- Actions & Audio Controls -->
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <button class="btn btn-secondary btn-sm" onclick="sendToTeams('{{ meeting.id }}')" title="Post adaptive summary card to configured Microsoft Teams channel">
+        📢 Send to Teams
+      </button>
+
+      <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 8px 14px; display: flex; align-items: center; gap: 12px;">
+        <button class="btn btn-secondary btn-sm" id="play-btn" style="border-radius: 50%; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center;">▶</button>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-main);">
+          <span id="current-play-time">0:00</span> / {{ (meeting.durationSec // 60)|int }}:{{ '%02d' % (meeting.durationSec % 60)|int }}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs Navigation -->
+<div class="tabs-nav">
+  <button class="tab-btn active" data-tab="overview">🧭 Overview</button>
+  <button class="tab-btn" data-tab="transcript">🎙️ Transcript</button>
+  <button class="tab-btn" data-tab="summary">📋 Summary</button>
+  <button class="tab-btn" data-tab="tasks">⚡ Action Items ({{ meeting.tasks|length }})</button>
+  <button class="tab-btn" data-tab="questions">❓ Open Questions ({{ meeting.questions|length if meeting.questions else 0 }})</button>
+  <button class="tab-btn" data-tab="decisions">🎯 Decisions ({{ meeting.decisions|length }})</button>
+  <button class="tab-btn" data-tab="insights">💡 Insights & Risks ({{ meeting.insights|length }})</button>
+  <button class="tab-btn" data-tab="chat">💬 AI Q&A Chat</button>
+  <button class="tab-btn" data-tab="analytics">📊 Analytics & Coaching</button>
+  <button class="tab-btn" data-tab="critic">🛡️ AI Critic Log</button>
+</div>
+
+<!-- 0. Overview Tab (Prompt F Agenda + Related Meetings) -->
+<div class="tab-content active" id="tab-overview">
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 20px;">
+    
+    <!-- Agenda Adherence Card (Prompt F) -->
+    <div class="card" style="padding: 22px;">
+      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+        <span>📋 Agenda Adherence</span>
+        {% if meeting.agendaResults %}
+          <span class="badge badge-success">{{ meeting.agendaAdherencePct or 100 }}% Covered</span>
+        {% endif %}
+      </h3>
+      {% if meeting.agendaResults %}
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          {% for ag in meeting.agendaResults %}
+          <div style="background: var(--bg-surface-elevated); padding: 12px 14px; border-radius: var(--radius-sm); border-left: 3px solid {% if ag.status == 'covered' %}var(--success){% elif ag.status == 'partially_covered' %}var(--warning){% else %}var(--error){% endif %};">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+              <strong style="color: var(--text-main);">{{ ag.item }}</strong>
+              <span class="badge" style="font-size: 10px; text-transform: uppercase;">{{ ag.status }}</span>
+            </div>
+            {% if ag.evidenceQuote %}
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 6px; font-style: italic;">
+                "{{ ag.evidenceQuote }}"
+                {% if ag.startSec is not none %}
+                  <span class="timestamp-pill" data-sec="{{ ag.startSec }}">@ {{ (ag.startSec // 60)|int }}:{{ "%02d"|format((ag.startSec % 60)|int) }}</span>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="color: var(--text-muted); font-size: 13px;">No explicit agenda items were supplied at upload. Meeting was analyzed dynamically from discussion turns.</p>
+      {% endif %}
+    </div>
+
+    <!-- Related Past Meetings (Prompt G) -->
+    <div class="card" style="padding: 22px;">
+      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>🔗 Contextually Related Meetings</span>
+      </h3>
+      {% if related %}
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          {% for rel in related %}
+          <div style="background: var(--bg-surface-elevated); padding: 12px 14px; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <a href="{{ url_for('meeting_detail', meeting_id=rel.id) }}" style="color: var(--accent); font-weight: 600; font-size: 13.5px; text-decoration: none;">
+                {{ rel.title }}
+              </a>
+              <div style="font-size: 11px; color: var(--text-subtle); margin-top: 2px;">
+                {{ rel.date }} &bull; Shared topics: {{ rel.shared_topics|join(', ') if rel.shared_topics else 'Strategic planning' }}
+              </div>
+            </div>
+            <span class="badge badge-info" style="font-size: 11px;">{{ rel.similarity_pct }}% Match</span>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="color: var(--text-muted); font-size: 13px;">No related previous meetings indexed in vector database.</p>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<!-- 1. Transcript Tab -->
+<div class="tab-content" id="tab-transcript">
+  <div style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+    <input type="text" id="transcript-search" placeholder="Search transcript keywords or speaker..." style="max-width: 380px; width: 100%; padding: 9px 14px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); color: var(--text-main); font-size: 13.5px;">
+    <span style="font-size: 12px; color: var(--text-subtle);">Click timestamps to jump playback</span>
+  </div>
+
+  <div class="transcript-stream">
+    {% for s in meeting.segments %}
+    <div class="segment-card">
+      <div class="speaker-avatar" style="background: {% for spk in meeting.speakers if spk.id == s.speakerId or spk.displayName == s.speakerLabel %}{{ spk.color }}{% else %}#6366f1{% endfor %};">
+        {{ s.speakerLabel[0] if s.speakerLabel else 'S' }}
+      </div>
+      <div class="segment-body">
+        <div class="segment-header">
+          <span class="speaker-name">{{ s.speakerLabel }}</span>
+          <span class="timestamp-pill" data-sec="{{ s.startSec }}">
+            {{ (s.startSec // 60)|int }}:{{ '%02d' % (s.startSec % 60)|int }}
+          </span>
+          {% if s.sentiment == 'positive' %}
+          <span class="badge badge-success" style="font-size: 10px; padding: 1px 6px;">Positive</span>
+          {% elif s.sentiment == 'negative' %}
+          <span class="badge badge-error" style="font-size: 10px; padding: 1px 6px;">Risk/Concern</span>
+          {% endif %}
+          <button type="button" class="btn btn-ghost btn-sm" onclick="TTS.speak('{{ s.speakerLabel }}: {{ s.text|replace('\'', '\\\'')|replace('\"', '&quot;') }}', this)" title="Listen to this line (Text-to-Speech)" style="padding: 2px 7px; font-size: 12px; margin-left: auto;">
+            🔊
+          </button>
+        </div>
+        <p class="segment-text">{{ s.text }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- 2. Summary Tab -->
+<div class="tab-content" id="tab-summary">
+  {% if meeting.summary %}
+  <div class="glass-card" style="margin-bottom: 20px; border-left: 4px solid var(--accent);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <h4 style="font-size: 15px; font-weight: 700; color: var(--accent); margin: 0;">Executive TL;DR</h4>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="TTS.speak(document.getElementById('summary-tldr-text').textContent, this)" style="border-color: var(--accent); color: var(--accent);">
+        🔊 Read Aloud (TTS)
+      </button>
+    </div>
+    <p id="summary-tldr-text" style="font-size: 14.5px; line-height: 1.6; color: var(--text-main);">{{ meeting.summary.tldr }}</p>
+  </div>
+
+  <div class="glass-card" style="margin-bottom: 20px;">
+    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">1-Minute Brief</h4>
+    <p style="font-size: 14px; line-height: 1.6; color: var(--text-muted);">{{ meeting.summary.oneMinute }}</p>
+  </div>
+
+  <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">Detailed Discussion by Topic</h4>
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    {% for topic in meeting.summary.detailed %}
+    <div class="glass-card" style="padding: 16px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+        <strong style="color: var(--text-main); font-size: 14px;">{{ topic.topic }}</strong>
+        <span class="timestamp-pill" data-sec="{{ topic.startSec }}">
+          {{ (topic.startSec // 60)|int }}:{{ '%02d' % (topic.startSec % 60)|int }}
+        </span>
+      </div>
+      <p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5;">{{ topic.text }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color: var(--text-muted);">No summary generated yet.</p>
+  {% endif %}
+</div>
+
+<!-- 3. Tasks Tab (Prompt A: Commitment Strength) -->
+<div class="tab-content" id="tab-tasks">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+    <div style="display: flex; gap: 8px;">
+      <button id="task-filter-all" class="btn btn-secondary btn-sm active" onclick="filterTasks('all')">All Tasks</button>
+      <button id="task-filter-atrisk" class="btn btn-secondary btn-sm" onclick="filterTasks('atrisk')">⚠️ At-Risk Commitments Only</button>
+      <button type="button" id="read-tasks-btn" class="btn btn-secondary btn-sm" style="margin-left: 8px;">
+        🔊 Read Action Items (TTS)
+      </button>
+    </div>
+    <span style="font-size: 12px; color: var(--text-muted);">Hover commitment chips to inspect hedge-word grounding</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;" id="tasks-list-container">
+    {% for t in meeting.tasks %}
+    <div class="glass-card task-card-item" data-strength="{{ t.commitment_strength or 'firm' }}" style="padding: 18px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+      <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap;">
+          <h4 style="font-size: 15px; font-weight: 700; color: var(--text-main);">{{ t.title }}</h4>
+          <span id="badge-task-{{ t.id }}" class="badge {% if t.status == 'done' %}badge-success{% elif t.status == 'doing' %}badge-primary{% else %}badge-neutral{% endif %}">
+            {{ t.status }}
+          </span>
+          
+          <!-- Commitment Strength Chip (Prompt A) -->
+          <span class="commitment-chip {{ t.commitment_strength or 'firm' }}" title="{{ t.commitment_reason or 'Clear promise with designated owner and target date' }}">
+            {{ t.commitment_strength or 'firm' }}
+          </span>
+        </div>
+        <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">
+          👤 Owner: <strong>{{ t.owner }}</strong> &nbsp;|&nbsp; 
+          📅 Deadline: <strong>{{ t.deadline or t.deadlineRaw or 'Not set' }}</strong>
+          {% if t.commitment_reason %}
+          &nbsp;|&nbsp; <span style="font-size: 12px; color: var(--text-subtle);">Reason: {{ t.commitment_reason }}</span>
+          {% endif %}
+        </div>
+        {% if t.quote %}
+        <blockquote style="font-size: 12.5px; font-style: italic; color: var(--text-subtle); border-left: 2px solid var(--border-subtle); padding-left: 10px;">
+          "{{ t.quote }}"
+        </blockquote>
+        {% endif %}
+      </div>
+      <button class="btn btn-secondary btn-sm task-toggle-btn" data-task-id="{{ t.id }}" data-status="{{ t.status }}">
+        Toggle Status
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- 4. Open Questions Tab (Prompt A) -->
+<div class="tab-content" id="tab-questions">
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    {% if meeting.questions %}
+      {% for q in meeting.questions %}
+      <div class="question-row" id="question-row-{{ q.id }}">
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+            <span class="question-status-chip {{ q.status }}">{{ q.status }}</span>
+            <strong style="font-size: 14.5px; color: var(--text-main);">{{ q.question }}</strong>
+            {% if q.start_sec is not none %}
+              <span class="timestamp-pill" data-sec="{{ q.start_sec }}">@ {{ (q.start_sec // 60)|int }}:{{ "%02d"|format((q.start_sec % 60)|int) }}</span>
+            {% endif %}
+          </div>
+          {% if q.answer_quote %}
+            <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--accent);">
+              Answer quote: "{{ q.answer_quote }}"
+              {% if q.answer_start_sec is not none %}
+                <span class="timestamp-pill" data-sec="{{ q.answer_start_sec }}">@ {{ (q.answer_start_sec // 60)|int }}:{{ "%02d"|format((q.answer_start_sec % 60)|int) }}</span>
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+        <div>
+          {% if not q.resolved %}
+            <button class="btn btn-secondary btn-sm" onclick="markQuestionResolved('{{ q.id }}')">
+              Mark Resolved
+            </button>
+          {% else %}
+            <span class="badge badge-success">✓ Resolved</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="card" style="text-align: center; padding: 40px; color: var(--text-muted);">
+        <p>No unanswered questions detected in this session transcript.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 5. Decisions Tab (Prompt C Devil's Advocate & Prompt D Lineage) -->
+<div class="tab-content" id="tab-decisions">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+    <span style="font-size: 12.5px; color: var(--text-muted);">Decisions logged and verified against verbatim meeting quotes</span>
+    <button type="button" id="read-decisions-btn" class="btn btn-secondary btn-sm">
+      🔊 Read All Decisions (TTS)
+    </button>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    {% for d in meeting.decisions %}
+    <div class="glass-card" style="border-left: 4px solid var(--success);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 10px;">
+        <span class="badge badge-success">✓ Verified Decision</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <!-- Devil's Advocate Trigger (Prompt C) -->
+          <button class="btn btn-secondary btn-sm" onclick="openDevilsAdvocate('{{ d.id }}')" style="font-size: 11px;">
+            👿 Challenge this decision
+          </button>
+          <!-- Decision Lineage Trigger (Prompt D) -->
+          <button class="btn btn-secondary btn-sm" onclick="openDecisionLineage('{{ d.id }}')" style="font-size: 11px;">
+            📜 Lineage Timeline
+          </button>
+          <span style="font-size: 12px; color: var(--text-subtle);">Decided by <strong>{{ d.decidedBy }}</strong></span>
+        </div>
+      </div>
+      <h4 style="font-size: 15.5px; font-weight: 700; margin-bottom: 6px;">{{ d.text }}</h4>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;"><strong>Rationale:</strong> {{ d.rationale }}</p>
+      {% if d.quote %}
+      <div style="font-size: 12px; color: var(--text-subtle); font-style: italic;">
+        Transcript Quote: "{{ d.quote }}"
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- 6. Insights & Risks Tab -->
+<div class="tab-content" id="tab-insights">
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+    {% for ins in meeting.insights %}
+    <div class="glass-card" style="border-left: 3px solid {% if ins.kind == 'risk' or ins.kind == 'blocker' %}var(--error){% elif ins.kind == 'opportunity' %}var(--success){% else %}var(--primary){% endif %};">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span class="badge {% if ins.kind == 'risk' or ins.kind == 'blocker' %}badge-error{% elif ins.kind == 'opportunity' %}badge-success{% else %}badge-primary{% endif %}">
+          {{ ins.kind|upper }}
+        </span>
+        <span style="font-size: 11px; color: var(--text-subtle);">{{ (ins.confidence * 100)|int }}% confidence</span>
+      </div>
+      <p style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text-main);">{{ ins.text }}</p>
+      {% if ins.quote %}
+      <div style="font-size: 12px; color: var(--text-muted); font-style: italic;">"{{ ins.quote }}"</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- 7. AI Q&A Chat Tab -->
+<div class="tab-content" id="tab-chat">
+  <div class="chat-box">
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-bubble assistant">
+        Ask me anything about <strong>{{ meeting.title }}</strong>! Grounded on transcript using <strong>{{ config_info.embedding_model }}</strong> and <strong>{{ config_info.chat_model }}</strong>.
+      </div>
+      {% for msg in meeting.chatMessages %}
+      <div class="chat-bubble {{ msg.role }}">
+        {{ msg.content }}
+        {% if msg.citations %}
+        <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
+          {% for c in msg.citations %}
+          <div class="citation-chip">
+            <strong>{{ c.speaker }}</strong> @ {{ (c.timeSec // 60)|int }}:{{ '%02d' % (c.timeSec % 60)|int }}: "{{ c.text }}"
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <form class="chat-input-bar" id="chat-form" data-meeting-id="{{ meeting.id }}">
+      <input type="text" id="chat-input" placeholder="e.g. What were the key architecture risks discussed?" required autocomplete="off">
+      <button type="submit" class="btn btn-primary">Send</button>
+    </form>
+  </div>
+</div>
+
+<!-- 8. Analytics & Speaker Coaching Tab (Prompt B) -->
+<div class="tab-content" id="tab-analytics">
+  <!-- Privacy Toggle -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: var(--bg-surface); padding: 12px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+    <div>
+      <h4 style="font-size: 14px; font-weight: 700; color: var(--text-main);">Speaker Coaching Scorecards</h4>
+      <p style="font-size: 12px; color: var(--text-muted);">Scores computed objectively in code (Clarity, Participation, Listening, Inquiry, Concision) with constructive tips.</p>
+    </div>
+    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none;">
+      <input type="checkbox" id="privacy-toggle" onchange="toggleCoachingPrivacy(this)">
+      <span>Hide Individual Scores (Show Team Aggregate)</span>
+    </label>
+  </div>
+
+  <!-- Scorecards Grid -->
+  <div class="scorecards-grid" id="coaching-scorecards-container">
+    {% if coaching %}
+      {% for sc in coaching %}
+      {% if not sc.not_enough_data and sc.subscores %}
+      <div class="scorecard-card individual-card">
+        <div class="scorecard-top">
+          <div>
+            <h4 style="font-size: 16px; font-weight: 700; color: var(--text-main);">{{ sc.speaker_name or sc.display_name }}</h4>
+            <div style="font-size: 12px; color: var(--text-muted);">
+              {{ sc.turns_count }} speaking turns &bull; {{ sc.wpm }} WPM &bull; {{ sc.filler_rate }}% fillers
+            </div>
+          </div>
+          <div class="score-ring" style="--score-pct: {{ sc.overall_score }};">
+            <span class="score-ring-val">{{ sc.overall_score }}</span>
+          </div>
+        </div>
+
+        <!-- 5 Sub-Scores -->
+        <div>
+          <div class="subscore-row">
+            <span>Clarity (Low Fillers/Hedge)</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="subscore-bar-bg"><div class="subscore-bar-fill" style="width: {{ sc.subscores.clarity }}%;"></div></div>
+              <strong style="width: 24px; text-align: right;">{{ sc.subscores.clarity }}</strong>
+            </div>
+          </div>
+          <div class="subscore-row">
+            <span>Participation (Balanced Share)</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="subscore-bar-bg"><div class="subscore-bar-fill" style="width: {{ sc.subscores.participation }}%;"></div></div>
+              <strong style="width: 24px; text-align: right;">{{ sc.subscores.participation }}</strong>
+            </div>
+          </div>
+          <div class="subscore-row">
+            <span>Listening (Low Interruptions)</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="subscore-bar-bg"><div class="subscore-bar-fill" style="width: {{ sc.subscores.listening }}%;"></div></div>
+              <strong style="width: 24px; text-align: right;">{{ sc.subscores.listening }}</strong>
+            </div>
+          </div>
+          <div class="subscore-row">
+            <span>Inquiry (Questions Asked)</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="subscore-bar-bg"><div class="subscore-bar-fill" style="width: {{ sc.subscores.inquiry }}%;"></div></div>
+              <strong style="width: 24px; text-align: right;">{{ sc.subscores.inquiry }}</strong>
+            </div>
+          </div>
+          <div class="subscore-row">
+            <span>Concision (Turn Length)</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="subscore-bar-bg"><div class="subscore-bar-fill" style="width: {{ sc.subscores.concision }}%;"></div></div>
+              <strong style="width: 24px; text-align: right;">{{ sc.subscores.concision }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grounded Strengths & Concrete Tip -->
+        <div style="background: var(--bg-surface-elevated); padding: 12px; border-radius: var(--radius-sm); font-size: 12.5px;">
+          <div style="color: var(--success); font-weight: 700; margin-bottom: 4px;">✓ Strengths:</div>
+          <ul style="padding-left: 16px; margin-bottom: 8px; color: var(--text-main);">
+            {% for s in sc.strengths %}<li>{{ s }}</li>{% endfor %}
+          </ul>
+          <div style="color: var(--accent); font-weight: 700; margin-bottom: 2px;">💡 Actionable Tip:</div>
+          <p style="color: var(--text-muted); margin: 0;">{{ sc.tip }}</p>
+        </div>
+      </div>
+      {% else %}
+      <div class="scorecard-card individual-card" style="opacity: 0.75; justify-content: center;">
+        <h4 style="font-size: 15px; font-weight: 700; color: var(--text-main);">{{ sc.speaker_name or sc.display_name }}</h4>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ sc.message or 'Not enough data (< 4 speaking turns recorded)' }}</div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    {% else %}
+      <p style="color: var(--text-muted);">Coaching scorecards computing...</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 9. AI Critic Tab -->
+<div class="tab-content" id="tab-critic">
+  <div class="glass-card" style="margin-bottom: 18px; border-left: 4px solid var(--primary);">
+    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">AI Critic Verification Audit</h4>
+    <p style="font-size: 13px; color: var(--text-muted);">
+      Every extracted decision and task is audited against transcript ground-truth quotes by <strong>{{ config_info.chat_model }}</strong>.
+    </p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    {% for cr in meeting.criticLog %}
+    <div class="glass-card" style="padding: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge {% if cr.action == 'kept' %}badge-success{% elif cr.action == 'corrected' %}badge-warning{% else %}badge-error{% endif %}">
+            {{ cr.action|upper }}
+          </span>
+          <strong style="font-size: 14px;">{{ cr.itemRef }}</strong>
+        </div>
+        <span style="font-size: 11px; color: var(--text-subtle);">Type: {{ cr.itemType }}</span>
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted);">{{ cr.reason }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Slide Drawer: AI Devil's Advocate (Prompt C) -->
+<div class="devils-backdrop" id="devils-backdrop" onclick="closeDevilsAdvocate()"></div>
+<div class="devils-drawer" id="devils-drawer">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px;">
+    <div>
+      <span class="badge" style="background: rgba(239,68,68,0.15); color: #f87171; font-weight: 700;">AI DEVIL'S ADVOCATE</span>
+      <h3 style="font-size: 18px; font-weight: 800; margin-top: 6px;">Decision Risk Challenge</h3>
+      <div style="font-size: 11px; color: var(--text-subtle);">AI-generated challenge, not a fact. Grounded on meeting quotes.</div>
+    </div>
+    <button onclick="closeDevilsAdvocate()" style="background: none; border: none; font-size: 20px; color: var(--text-subtle); cursor: pointer;">&times;</button>
+  </div>
+
+  <div id="devils-content-body" style="display: flex; flex-direction: column; gap: 16px; font-size: 13.5px;">
+    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+      Reasoning with gpt-4.1-mini to stress-test this decision...
+    </div>
+  </div>
+
+  <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-subtle); display: flex; gap: 10px;">
+    <button class="btn btn-secondary btn-sm" onclick="copyDiscussionPoints()" style="flex: 1;">
+      📋 Copy as Discussion Points
+    </button>
+  </div>
+</div>
+
+<!-- Modal: Decision Lineage Timeline (Prompt D) -->
+<div class="lineage-modal" id="lineage-modal">
+  <div class="lineage-dialog">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+      <div>
+        <span class="badge badge-info" style="font-size: 11px;">DECISION LINEAGE</span>
+        <h3 style="font-size: 18px; font-weight: 800; margin-top: 4px;">Cross-Meeting Evolution Timeline</h3>
+        <p id="lineage-summary-text" style="font-size: 13px; color: var(--text-muted); margin-top: 4px;"></p>
+      </div>
+      <button onclick="closeDecisionLineage()" style="background: none; border: none; font-size: 20px; color: var(--text-subtle); cursor: pointer;">&times;</button>
+    </div>
+
+    <div id="lineage-steps-container" style="display: flex; flex-direction: column; gap: 16px;">
+      <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+        Retrieving decision lineage across meetings...
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Filter Tasks by commitment strength
+function filterTasks(type) {
+  document.getElementById('task-filter-all').classList.toggle('active', type === 'all');
+  document.getElementById('task-filter-atrisk').classList.toggle('active', type === 'atrisk');
+
+  document.querySelectorAll('.task-card-item').forEach(card => {
+    const strength = card.getAttribute('data-strength');
+    if (type === 'all' || strength === 'soft' || strength === 'vague') {
+      card.style.display = 'flex';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+}
+
+// Mark question resolved
+async function markQuestionResolved(qId) {
+  try {
+    const res = await fetch(`/api/questions/${qId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'answered', resolved: true })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Question marked as resolved!', 'success');
+      const row = document.getElementById(`question-row-${qId}`);
+      if (row) {
+        row.querySelector('.question-status-chip').className = 'question-status-chip answered';
+        row.querySelector('.question-status-chip').textContent = 'answered';
+        row.querySelector('button')?.remove();
+      }
+    }
+  } catch (e) {
+    showToast('Failed to update question', 'error');
+  }
+}
+
+// Coaching Privacy Toggle
+function toggleCoachingPrivacy(checkbox) {
+  const cards = document.querySelectorAll('.individual-card');
+  cards.forEach(c => {
+    c.style.display = checkbox.checked ? 'none' : 'flex';
+  });
+  if (checkbox.checked) {
+    showToast('Individual coaching scorecards hidden', 'info');
+  } else {
+    showToast('Displaying individual coaching scorecards', 'info');
+  }
+}
+
+// Devil's Advocate
+async function openDevilsAdvocate(decisionId) {
+  const drawer = document.getElementById('devils-drawer');
+  const backdrop = document.getElementById('devils-backdrop');
+  const body = document.getElementById('devils-content-body');
+  drawer.classList.add('open');
+  backdrop.classList.add('open');
+
+  body.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted);">Generating risk challenge grounded in meeting quotes...</div>';
+
+  try {
+    const res = await fetch(`/api/decisions/${decisionId}/review`, { method: 'POST' });
+    const data = await res.json();
+    const r = data.data;
+
+    let risksHtml = r.risks.map(x => `
+      <li style="margin-bottom: 6px;">
+        <strong>${escapeHtml(x.risk || x)}</strong>
+        ${x.quote ? `<div style="font-size: 11.5px; color: var(--text-subtle); font-style: italic;">"${escapeHtml(x.quote)}"</div>` : ''}
+        ${x.is_inferred ? `<span class="inferred-tag">AI Inference</span>` : ''}
+      </li>
+    `).join('');
+
+    let assumptionsHtml = r.hidden_assumptions.map(x => `
+      <li style="margin-bottom: 6px;">
+        <strong>${escapeHtml(x.assumption || x)}</strong>
+        ${x.is_inferred ? `<span class="inferred-tag">AI Inference</span>` : ''}
+      </li>
+    `).join('');
+
+    let stakeholdersHtml = r.missing_stakeholders.map(s => `<span class="badge" style="background: rgba(255,255,255,0.06);">${escapeHtml(s)}</span>`).join(' ');
+
+    let questionsHtml = r.questions_to_ask.map(q => `<li>${escapeHtml(q)}</li>`).join('');
+
+    body.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span>Assessed Risk Level:</span>
+        <span class="risk-badge ${r.overall_risk}">${r.overall_risk} Risk</span>
+      </div>
+      <div>
+        <h4 style="color: var(--error); font-size: 14px; margin-bottom: 8px;">Key Risks & Blindspots:</h4>
+        <ul style="padding-left: 20px;">${risksHtml}</ul>
+      </div>
+      <div>
+        <h4 style="color: var(--warning); font-size: 14px; margin-bottom: 8px;">Hidden Assumptions:</h4>
+        <ul style="padding-left: 20px;">${assumptionsHtml}</ul>
+      </div>
+      <div>
+        <h4 style="color: var(--accent); font-size: 14px; margin-bottom: 8px;">Missing Stakeholders Not Present:</h4>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;">${stakeholdersHtml}</div>
+      </div>
+      <div>
+        <h4 style="color: var(--text-main); font-size: 14px; margin-bottom: 8px;">Recommended Challenge Questions:</h4>
+        <ul style="padding-left: 20px;">${questionsHtml}</ul>
+      </div>
+    `;
+  } catch (err) {
+    body.innerHTML = '<div style="color: var(--error); padding: 20px;">Failed to load Devil\'s Advocate review.</div>';
+  }
+}
+
+function closeDevilsAdvocate() {
+  document.getElementById('devils-drawer').classList.remove('open');
+  document.getElementById('devils-backdrop').classList.remove('open');
+}
+
+function copyDiscussionPoints() {
+  const content = document.getElementById('devils-content-body').innerText;
+  navigator.clipboard.writeText(content).then(() => {
+    showToast('Discussion points copied to clipboard!', 'success');
+  });
+}
+
+// Decision Lineage
+async function openDecisionLineage(decisionId) {
+  const modal = document.getElementById('lineage-modal');
+  const container = document.getElementById('lineage-steps-container');
+  const summaryEl = document.getElementById('lineage-summary-text');
+  modal.classList.add('open');
+  container.innerHTML = '<div style="text-align: center; padding: 30px; color: var(--text-muted);">Tracing decision history across past sessions...</div>';
+
+  try {
+    const res = await fetch(`/api/decisions/${decisionId}/lineage`);
+    const data = await res.json();
+    const l = data.data;
+
+    summaryEl.textContent = l.summary || 'Traced across meetings.';
+
+    let stepsHtml = '';
+    (l.events || []).forEach((ev, idx) => {
+      stepsHtml += `
+        <div class="lineage-step">
+          <div class="lineage-dot">${idx + 1}</div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="badge" style="background: rgba(99,102,241,0.15); color: #818cf8; text-transform: uppercase; font-size: 10px;">${ev.label || 'Discussed'}</span>
+              <strong style="color: var(--text-main); font-size: 13.5px;">${escapeHtml(ev.meeting_title || 'Meeting')}</strong>
+              <span style="font-size: 11.5px; color: var(--text-subtle);">${ev.date || ''}</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 4px 0;">${escapeHtml(ev.explanation || '')}</p>
+            ${ev.quote ? `<blockquote style="font-size: 12px; color: var(--text-subtle); font-style: italic; border-left: 2px solid var(--border-subtle); padding-left: 8px; margin: 4px 0;">"${escapeHtml(ev.quote)}" — ${ev.speaker || 'Speaker'}</blockquote>` : ''}
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = stepsHtml || '<p style="color: var(--text-muted);">No earlier meeting lineage events found.</p>';
+  } catch (err) {
+    container.innerHTML = '<div style="color: var(--error);">Error retrieving decision timeline.</div>';
+  }
+}
+
+function closeDecisionLineage() {
+  document.getElementById('lineage-modal').classList.remove('open');
+}
+
+// Teams Webhook
+async function sendToTeams(meetingId) {
+  showToast('Dispatching meeting summary to Microsoft Teams...', 'info');
+  try {
+    const res = await fetch(`/api/meetings/${meetingId}/teams`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Meeting summary posted to Teams successfully!', 'success');
+    } else {
+      showToast(`Teams webhook notice: ${data.message || data.error}`, 'warning');
+    }
+  } catch (err) {
+    showToast('Failed to post to Teams', 'error');
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block page_title %}Meeting Knowledge Graph{% endblock %}
+{% block page_title_inner %}Meeting Knowledge Graph & Entity Relationships{% endblock %}
+
+{% block content %}
+<div class="knowledge-graph-wrapper" style="display: flex; flex-direction: column; gap: 16px;">
+  
+  <!-- Graph Control Bar & Filters -->
+  <div class="card" style="padding: 14px 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+    
+    <!-- Search & Focus -->
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <div style="position: relative; width: 220px;">
+        <input type="text" id="graph-search" class="form-input" placeholder="Search entity node..." style="padding-left: 32px; font-size: 13px;">
+        <svg style="position: absolute; left: 10px; top: 10px; color: var(--text-subtle);" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <label for="graph-person-focus" style="font-size: 12px; color: var(--text-muted);">Focus Person:</label>
+        <select id="graph-person-focus" class="form-select" style="font-size: 12px; padding: 6px 10px;">
+          <option value="">All Entities</option>
+          {% for p in all_participants %}
+          <option value="{{ p }}">{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <label for="graph-type-filter" style="font-size: 12px; color: var(--text-muted);">Meeting Type:</label>
+        <select id="graph-type-filter" class="form-select" style="font-size: 12px; padding: 6px 10px;">
+          <option value="">All Types</option>
+          <option value="planning">Planning</option>
+          <option value="standup">Standup</option>
+          <option value="review">Review</option>
+          <option value="retrospective">Retro</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Node Type Legend & Toggles -->
+    <div style="display: flex; align-items: center; gap: 14px; font-size: 12px; flex-wrap: wrap;">
+      <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #6366f1;"></span>
+        <input type="checkbox" id="toggle-person" checked> <span>People</span>
+      </label>
+      <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #3b82f6;"></span>
+        <input type="checkbox" id="toggle-meeting" checked> <span>Meetings</span>
+      </label>
+      <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #06b6d4;"></span>
+        <input type="checkbox" id="toggle-topic" checked> <span>Topics</span>
+      </label>
+      <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span>
+        <input type="checkbox" id="toggle-decision" checked> <span>Decisions</span>
+      </label>
+      <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></span>
+        <input type="checkbox" id="toggle-task" checked> <span>Tasks</span>
+      </label>
+      <button id="graph-reset-btn" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 11px;">Reset View</button>
+    </div>
+
+  </div>
+
+  <!-- Interactive Graph Container & Entity Details Panel -->
+  <div class="graph-container">
+    <div class="graph-viewport" id="graph-viewport">
+      <canvas id="graph-canvas" style="width: 100%; height: 100%; display: block; cursor: grab;"></canvas>
+      <div id="graph-tooltip" style="position: absolute; display: none; background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border-active); color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; pointer-events: none; z-index: 50;"></div>
+      <div style="position: absolute; bottom: 16px; left: 16px; background: rgba(12, 19, 34, 0.85); padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-size: 11px; color: var(--text-muted); display: flex; gap: 16px;">
+        <span>Nodes: <strong id="node-count" style="color: var(--text-main);">0</strong></span>
+        <span>Edges: <strong id="edge-count" style="color: var(--text-main);">0</strong></span>
+        <span>Scroll to Zoom • Drag to Pan / Move Node</span>
+      </div>
+    </div>
+
+    <!-- Node Side Panel -->
+    <div class="graph-side-panel" id="graph-side-panel">
+      <div id="graph-details-empty" style="text-align: center; color: var(--text-muted); padding: 40px 10px;">
+        <div style="font-size: 32px; margin-bottom: 12px;">🔍</div>
+        <p style="font-size: 14px; font-weight: 600; color: var(--text-main);">Select Any Entity Node</p>
+        <p style="font-size: 12px; margin-top: 6px;">Click a person, meeting, decision or task in the graph to inspect linked relationships, commitments and discussion notes.</p>
+      </div>
+      <div id="graph-details-content" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div>
+            <span id="detail-type-badge" class="badge badge-info" style="text-transform: uppercase; font-size: 10px;">PERSON</span>
+            <h3 id="detail-node-title" style="font-size: 16px; font-weight: 700; margin-top: 6px; color: var(--text-main);">Sarah Jenkins</h3>
+          </div>
+          <button id="close-detail-panel" style="background: none; border: none; color: var(--text-subtle); cursor: pointer; font-size: 18px;">&times;</button>
+        </div>
+        <div id="detail-node-body" style="font-size: 13px; color: var(--text-muted); line-height: 1.5; display: flex; flex-direction: column; gap: 14px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

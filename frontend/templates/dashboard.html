@@ -1,0 +1,671 @@
+{% extends "base.html" %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_heading %}Executive Dashboard{% endblock %}
+
+{% block content %}
+<!-- Page Intro Header with 1-Line Explainer -->
+<div class="dashboard-page-intro">
+  <h2>Executive Intelligence Dashboard</h2>
+  <p>Central intelligence hub tracking meeting volume, commitment accountability, governance risks, and multi-agent transcript analytics.</p>
+</div>
+
+<!-- Demo Mode Banner (Prompt 6) -->
+{% if demo_mode %}
+<div id="demo-mode-banner" class="demo-banner" style="margin-bottom: 24px;">
+  <div style="display: flex; align-items: center; gap: 10px;">
+    <span style="font-size: 18px;">💡</span>
+    <div>
+      <strong>Running in Demo Mode (no Foundry credentials required)</strong>
+      <p style="font-size: 12px; margin-top: 2px; color: var(--text-muted);">
+        All search, analytics, health scores, and cross-meeting intelligence work completely offline from precomputed SQLite fixtures.
+      </p>
+    </div>
+  </div>
+  <button id="banner-load-sample-btn" class="btn btn-secondary btn-sm">Load Sample Meeting</button>
+</div>
+{% endif %}
+
+<!-- =========================================================================
+     TOPIC 1: Executive Overview & Meeting Volume
+     ========================================================================= -->
+<section class="topic-section">
+  <div class="topic-header">
+    <div class="topic-title">
+      <span>📊 Executive Overview & Meeting Volume</span>
+      <span class="badge badge-primary">Volume & Time</span>
+    </div>
+    <div class="topic-desc">High-level organizational metrics tracking total meeting volume, audio recording duration, estimated time investment, and overall effectiveness.</div>
+  </div>
+
+  <div class="stats-grid-4">
+    <!-- 1. Total Meetings -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(99, 102, 241, 0.15); color: var(--primary);">📊</div>
+      <div class="stat-info">
+        <div class="stat-label">Total Meetings</div>
+        <div class="stat-value" id="stat-total-meetings">{{ stats.totalMeetings }}</div>
+      </div>
+    </div>
+
+    <!-- 2. Total Audio Time -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(6, 182, 212, 0.15); color: var(--accent);">⏱️</div>
+      <div class="stat-info">
+        <div class="stat-label">Total Audio Time</div>
+        <div class="stat-value" id="stat-total-time">{{ stats.totalDurationFormatted }}</div>
+      </div>
+    </div>
+
+    <!-- 3. Est. Meeting Time Cost (Prompt F) -->
+    <div class="stat-card" title="Estimated meeting cost based on duration, speaker headcount and configured hourly rates">
+      <div class="stat-icon" style="background: rgba(16, 185, 129, 0.15); color: var(--success);">💰</div>
+      <div class="stat-info">
+        <div class="stat-label">Est. Time Cost</div>
+        <div class="stat-value" id="stat-meeting-cost">{{ stats.formattedMeetingCost }}</div>
+      </div>
+    </div>
+
+    <!-- 4. Avg Health Score -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(139, 92, 246, 0.15); color: #a78bfa;">❤️</div>
+      <div class="stat-info">
+        <div class="stat-label">Avg Health Score</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="stat-value" id="stat-avg-health">{{ stats.avgHealth }}/100</span>
+          <span class="health-mini-pill {% if stats.avgHealth >= 75 %}health-high{% elif stats.avgHealth >= 50 %}health-mid{% else %}health-low{% endif %}">
+            {% if stats.avgHealth >= 75 %}Good{% elif stats.avgHealth >= 50 %}Fair{% else %}Action Needed{% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================================
+     TOPIC 2: Action Items & Commitment Accountability
+     ========================================================================= -->
+<section class="topic-section">
+  <div class="topic-header">
+    <div class="topic-title">
+      <span>⚡ Action Items & Commitment Accountability</span>
+      <span class="badge badge-warning">Accountability</span>
+    </div>
+    <div class="topic-desc">Monitors committed deliverables across meetings, highlights hedged or unassigned promises, and tracks open inquiry questions.</div>
+  </div>
+
+  <div class="stats-grid-3">
+    <!-- 1. Open Tasks -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">⚡</div>
+      <div class="stat-info">
+        <div class="stat-label">Open Action Items</div>
+        <div class="stat-value" id="stat-open-tasks">{{ stats.openTasks }}</div>
+      </div>
+    </div>
+
+    <!-- 2. Soft / Vague Commitments (Prompt A) -->
+    <div class="stat-card {% if stats.softCommitments > 0 %}stat-card-alert{% endif %}" title="Hedged commitments or undefined owners detected by code lexicon">
+      <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">⚠️</div>
+      <div class="stat-info">
+        <div class="stat-label">Soft / Vague Commitments</div>
+        <div class="stat-value {% if stats.softCommitments > 0 %}text-warning{% endif %}" id="stat-soft-commitments">
+          {{ stats.softCommitments }}
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Open Questions (Prompt A) -->
+    <div class="stat-card" title="Substantial questions raised in meetings awaiting resolution">
+      <div class="stat-icon" style="background: rgba(6, 182, 212, 0.15); color: var(--accent);">❓</div>
+      <div class="stat-info">
+        <div class="stat-label">Unanswered Questions</div>
+        <div class="stat-value" id="stat-open-questions">{{ stats.openQuestions }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================================
+     TOPIC 3: Strategic Governance & Risk Management
+     ========================================================================= -->
+<section class="topic-section">
+  <div class="topic-header">
+    <div class="topic-title">
+      <span>🛡️ Strategic Governance & Risk Management</span>
+      <span class="badge badge-success">Governance</span>
+    </div>
+    <div class="topic-desc">Tracks formalized organizational decisions, evaluates risk levels with AI Devil's Advocate, and flags road-block contradictions.</div>
+  </div>
+
+  <div class="stats-grid-3">
+    <!-- 1. Decisions Logged -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(16, 185, 129, 0.15); color: var(--success);">🎯</div>
+      <div class="stat-info">
+        <div class="stat-label">Decisions Logged</div>
+        <div class="stat-value" id="stat-total-decisions">{{ stats.totalDecisions }}</div>
+      </div>
+    </div>
+
+    <!-- 2. High-Risk Decisions (Prompt C) -->
+    <div class="stat-card {% if stats.highRiskDecisions > 0 %}stat-card-alert{% endif %}" title="Decisions flagged with high critical risk by AI Devil's Advocate">
+      <div class="stat-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--error);">👿</div>
+      <div class="stat-info">
+        <div class="stat-label">High-Risk Decisions</div>
+        <div class="stat-value {% if stats.highRiskDecisions > 0 %}text-error{% endif %}" id="stat-high-risk-decisions">
+          {{ stats.highRiskDecisions }}
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Cross-Meeting Conflict Indicator -->
+    <div class="stat-card {% if conflicts %}stat-card-alert{% endif %}" title="Cross-meeting contradictions and broken commitments flagged">
+      <div class="stat-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--error);">⚠️</div>
+      <div class="stat-info">
+        <div class="stat-label">Cross-Meeting Conflicts</div>
+        <div class="stat-value {% if conflicts %}text-error{% endif %}">
+          {{ conflicts|length }}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================================
+     TOPIC 4: Attention Needed — Cross-Meeting Tracker
+     ========================================================================= -->
+<section id="attention-needed-panel" class="topic-section attention-panel" style="{% if not conflicts %}display: none;{% endif %}">
+  <div class="topic-header">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+      <div class="topic-title" style="color: #f59e0b;">
+        <span class="pulse-warning-dot"></span>
+        <span>Attention Needed — Cross-Meeting Tracker</span>
+        <span class="badge badge-warning" id="conflict-badge-count">{{ conflicts|length }} Flagged</span>
+      </div>
+    </div>
+    <div class="topic-desc">Contradictions, broken commitments, and timeline mismatches detected across different meetings by AI reasoning.</div>
+  </div>
+
+  <div class="attention-cards-container" id="attention-cards-container">
+    {% for c in conflicts[:5] %}
+    <div class="warning-card" id="warning-card-{{ c.id }}" data-conflict-id="{{ c.id }}">
+      <div class="warning-card-top">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge {% if c.kind == 'contradiction' or c.kind == 'conflict' %}badge-error{% else %}badge-warning{% endif %}">
+            {{ c.kind|upper }}
+          </span>
+          <strong style="font-size: 13.5px; color: var(--text-main);">{{ c.description }}</strong>
+        </div>
+        <div class="warning-card-actions">
+          <button class="btn btn-sm btn-ghost conflict-dismiss-btn" data-id="{{ c.id }}" title="Dismiss warning">Dismiss</button>
+          <button class="btn btn-sm btn-secondary conflict-resolve-btn" data-id="{{ c.id }}" title="Mark resolved">Mark Resolved</button>
+        </div>
+      </div>
+
+      <!-- Side-by-side evidence quotes -->
+      {% if c.evidence %}
+      <div class="evidence-grid">
+        {% for ev in c.evidence %}
+        <div class="evidence-box">
+          <div class="evidence-meta">
+            <a href="{{ url_for('meeting_detail', meeting_id=ev.meetingId) }}#sec-{{ ev.timeSec }}" class="evidence-meeting-link">
+              📁 {{ ev.meeting }}
+            </a>
+            <span class="evidence-time">@ {{ (ev.timeSec // 60)|int }}:{{ "%02d"|format((ev.timeSec % 60)|int) }}</span>
+          </div>
+          <div class="evidence-quote">“{{ ev.quote }}”</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- =========================================================================
+     TOPIC 5: Live Capture & Multi-Model Intelligence Pipeline
+     ========================================================================= -->
+<section class="topic-section">
+  <div class="topic-header">
+    <div class="topic-title">
+      <span>🎙️ Live Capture & Multi-Model Intelligence Pipeline</span>
+      <span class="badge badge-primary">Foundry AI Active</span>
+    </div>
+    <div class="topic-desc">Real-time speech capture and automated multi-stage processing powered by Microsoft Foundry AI models.</div>
+  </div>
+
+  <div class="glass-card banner-pipeline" style="padding: 20px 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <p style="font-size: 13px; color: var(--text-main); margin-bottom: 4px;">
+          <strong>Tri-Model Architecture:</strong> Diarization via <code style="color: var(--accent);">{{ config_info.transcribe_model }}</code> &bull;
+          Dense Embeddings via <code style="color: var(--accent);">{{ config_info.embedding_model }}</code> &bull;
+          Reasoning via <code style="color: var(--accent);">{{ config_info.chat_model }}</code>
+        </p>
+        <span style="font-size: 12px; color: var(--text-muted);">
+          Sequential rate-safe execution with automated hallucination criticism and quote verification.
+        </span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a href="{{ url_for('live_page') }}" class="btn btn-secondary" style="border-color: #ef4444; color: #ef4444;">
+          <span class="rec-pulse" style="width: 8px; height: 8px; margin-right: 4px;"></span> Start Live Meeting
+        </a>
+        <a href="{{ url_for('upload_page') }}" class="btn btn-primary">Process New Meeting</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================================
+     TOPIC 6: Recorded Meetings Directory & Filter Suite
+     ========================================================================= -->
+<section class="topic-section">
+  <div class="topic-header">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+      <div class="topic-title">
+        <span>📁 Recorded Meetings Directory</span>
+        <span class="meeting-counter-pill" id="meeting-counter-pill">
+          {{ meetings|length }} of {{ meetings|length }} meetings
+        </span>
+      </div>
+    </div>
+    <div class="topic-desc">Browse, search, and inspect full transcript intelligence, coaching scorecards, and decision lineages for each session.</div>
+  </div>
+
+  <!-- Re-arranged Two-Tier Filter Toolbar -->
+  <div class="toolbar-card glass-card">
+    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-subtle); margin-bottom: 10px;">
+      Filter & Search Suite — Narrow by keyword, meeting category, status, speaker, or date range
+    </div>
+
+    <!-- Tier 1: Search Input & Sort Dropdown -->
+    <div class="toolbar-tier-1">
+      <div class="search-input-wrapper" style="flex: 3;">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="meeting-search-input" class="search-input" placeholder="Search title, summary, participant, tag..." aria-label="Search meetings">
+        <button id="search-clear-btn" class="search-clear-btn" style="display: none;" title="Clear search">✕</button>
+      </div>
+
+      <div class="filter-group" style="flex: 1; min-width: 180px;">
+        <label for="filter-sort">Sort By</label>
+        <select id="filter-sort" class="toolbar-select" style="width: 100%;">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="highest_health">Highest Health Score</option>
+          <option value="lowest_health">Lowest Health Score</option>
+          <option value="most_tasks">Most Open Tasks</option>
+          <option value="title_az">Title A-Z</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Tier 2: Categorical Facets -->
+    <div class="toolbar-tier-2">
+      <!-- Meeting Type Filter -->
+      <div class="filter-group">
+        <label for="filter-type">Type</label>
+        <select id="filter-type" class="toolbar-select">
+          <option value="all">All Types</option>
+          <option value="planning">Planning</option>
+          <option value="interview">Interview</option>
+          <option value="client_call">Client Call</option>
+          <option value="standup">Standup</option>
+          <option value="brainstorm">Brainstorm</option>
+          <option value="retro">Retrospective</option>
+          <option value="general">Other / General</option>
+        </select>
+      </div>
+
+      <!-- Status Filter -->
+      <div class="filter-group">
+        <label for="filter-status">Status</label>
+        <select id="filter-status" class="toolbar-select">
+          <option value="all">All Statuses</option>
+          <option value="done">Done</option>
+          <option value="processing">Processing</option>
+          <option value="failed">Failed</option>
+        </select>
+      </div>
+
+      <!-- Tag Filter -->
+      <div class="filter-group">
+        <label for="filter-tag">Tag</label>
+        <select id="filter-tag" class="toolbar-select">
+          <option value="all">All Tags</option>
+          {% for tg in all_tags %}
+          <option value="{{ tg }}">{{ tg }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Participant Filter -->
+      <div class="filter-group">
+        <label for="filter-participant">Participant</label>
+        <select id="filter-participant" class="toolbar-select">
+          <option value="all">All Participants</option>
+          {% for part in all_participants %}
+          <option value="{{ part }}">{{ part }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Date Range (From / To) -->
+      <div class="filter-group">
+        <label for="filter-from-date">From</label>
+        <input type="date" id="filter-from-date" class="toolbar-input-date" aria-label="Filter from date">
+      </div>
+      <div class="filter-group">
+        <label for="filter-to-date">To</label>
+        <input type="date" id="filter-to-date" class="toolbar-input-date" aria-label="Filter to date">
+      </div>
+    </div>
+
+    <!-- Active Filter Chips Strip -->
+    <div id="active-filter-chips" class="active-filter-chips" style="display: none;">
+      <span style="font-size: 11.5px; color: var(--text-subtle);">Active filters:</span>
+      <div id="chips-container" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+      <button id="clear-all-filters-btn" class="clear-filters-link">Clear all</button>
+    </div>
+  </div>
+
+  <!-- Empty State Container -->
+  <div id="meetings-empty-state" class="empty-state-box glass-card" style="display: none;">
+    <div style="font-size: 36px; margin-bottom: 12px;">🔍</div>
+    <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">No meetings match your criteria</h4>
+    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+      Try clearing some filters or searching for different keywords.
+    </p>
+    <div style="display: flex; gap: 10px; justify-content: center;">
+      <button id="empty-clear-btn" class="btn btn-secondary btn-sm">Clear Filters</button>
+      <button id="empty-load-sample-btn" class="btn btn-primary btn-sm">Load Sample Meeting</button>
+    </div>
+  </div>
+
+  <!-- Meetings Cards Grid -->
+  <div id="meetings-cards-grid" class="meetings-grid">
+    {% for m in meetings %}
+    <div class="meeting-card glass-card" 
+         id="meeting-card-{{ m.id }}" 
+         data-meeting-id="{{ m.id }}"
+         data-title="{{ m.title|lower }}"
+         data-summary="{{ m.summary.tldr|lower if m.summary else '' }}"
+         data-type="{{ m.meetingType|lower }}"
+         data-status="{{ m.status|lower }}"
+         data-health="{{ m.healthScore }}"
+         data-date="{{ m.meetingDate }}"
+         data-tags="{{ m.tags|join(',')|lower }}"
+         data-speakers="{% for s in m.speakers %}{{ s.displayName|lower }} {% endfor %}">
+
+      <!-- Top Card Bar: Type Badge, Conflict Dot, Status, Health Badge & Three-Dot Menu -->
+      <div class="card-header-row">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge badge-primary">{{ m.meetingTypeLabel }}</span>
+          {% if m.conflictCount and m.conflictCount > 0 %}
+          <span class="conflict-indicator-dot" title="{{ m.conflictCount }} active conflict(s) or unfulfilled commitments">
+            ⚠️ {{ m.conflictCount }}
+          </span>
+          {% endif %}
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <!-- Status Badge (Done, Processing with stage, Queued, Failed) -->
+          <div class="card-status-container" id="status-container-{{ m.id }}">
+            {% if m.status == 'done' %}
+              <span class="badge badge-success">Done</span>
+            {% elif m.status == 'processing' %}
+              <span class="badge badge-processing animated-pulse" id="badge-status-{{ m.id }}">
+                ⏳ {{ m.statusDetail or 'Processing' }}
+              </span>
+            {% elif m.status == 'failed' %}
+              <span class="badge badge-error">Failed</span>
+            {% else %}
+              <span class="badge badge-neutral">{{ m.status|title }}</span>
+            {% endif %}
+          </div>
+
+          <!-- Health Score Badge (Green 75+, Amber 50-74, Red < 50) with popover trigger -->
+          <div class="health-badge-wrapper">
+            <button class="health-score-btn {% if m.healthScore >= 75 %}health-high{% elif m.healthScore >= 50 %}health-mid{% else %}health-low{% endif %}"
+                    data-meeting-id="{{ m.id }}"
+                    title="Click to view Health Score breakdown"
+                    aria-label="Health score {{ m.healthScore }}/100">
+              {{ m.healthScore }}
+            </button>
+
+            <!-- Popover Breakdown (Prompt 1) -->
+            <div class="health-popover glass-card" id="popover-health-{{ m.id }}" style="display: none;">
+              <div class="popover-header">
+                <strong style="font-size: 13.5px;">Meeting Health: {{ m.healthScore }}/100</strong>
+                <button class="popover-close-btn" data-target="popover-health-{{ m.id }}">✕</button>
+              </div>
+              <div class="popover-body">
+                {% if m.healthBreakdown %}
+                  {% for item in m.healthBreakdown %}
+                  <div class="health-metric-row">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+                      <span style="color: var(--text-main); font-weight: 600;">{{ item.label }}</span>
+                      <span style="color: {% if item.score >= 75 %}var(--success){% elif item.score >= 50 %}var(--warning){% else %}var(--error){% endif %}; font-weight: 700;">
+                        {{ item.score }}/100
+                      </span>
+                    </div>
+                    <div class="health-metric-bar-bg">
+                      <div class="health-metric-bar-fill" style="width: {{ item.score }}%; background: {% if item.score >= 75 %}var(--success){% elif item.score >= 50 %}var(--warning){% else %}var(--error){% endif %};"></div>
+                    </div>
+                    <p class="health-metric-desc">{{ item.explanation }}</p>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <p style="font-size: 12px; color: var(--text-muted);">Standard balanced interaction pattern observed.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <!-- Three-Dot Menu (Prompt 4) -->
+          <div class="card-dropdown-wrapper">
+            <button class="card-menu-btn" data-menu-id="menu-{{ m.id }}" aria-label="Meeting actions menu">⋮</button>
+            <div class="card-menu-dropdown glass-card" id="menu-{{ m.id }}" style="display: none;">
+              <button class="dropdown-item menu-rename-btn" data-id="{{ m.id }}" data-title="{{ m.title }}">
+                ✏️ Rename
+              </button>
+              <button class="dropdown-item menu-tags-btn" data-id="{{ m.id }}" data-tags="{{ m.tags|join(', ') }}">
+                🏷️ Edit Tags
+              </button>
+              <button class="dropdown-item menu-reprocess-btn" data-id="{{ m.id }}">
+                🔄 Re-process
+              </button>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-submenu-header">Export:</div>
+              <a href="/export/{{ m.id }}/md" class="dropdown-item" download>📝 Markdown (.md)</a>
+              <a href="/export/{{ m.id }}/json" class="dropdown-item" download>📦 JSON (.json)</a>
+              <a href="/export/{{ m.id }}/docx" class="dropdown-item" download>📄 Word (.docx)</a>
+              <a href="/export/{{ m.id }}/pdf" class="dropdown-item" download>📕 PDF (.pdf)</a>
+              <a href="/export/{{ m.id }}/ics" class="dropdown-item" download>📅 Calendar (.ics)</a>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item text-error menu-delete-btn" data-id="{{ m.id }}" data-title="{{ m.title }}">
+                🗑️ Delete Meeting
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processing Progress Bar (if processing) -->
+      <div class="card-progress-bar-container" id="progress-bar-container-{{ m.id }}" style="{% if m.status != 'processing' %}display: none;{% endif %} margin: 8px 0;">
+        <div class="thin-progress-bg">
+          <div class="thin-progress-fill animated-shimmer" id="progress-fill-{{ m.id }}" style="width: {{ m.progressPct or 20 }}%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--accent); margin-top: 3px;">
+          <span id="progress-detail-text-{{ m.id }}">{{ m.statusDetail or 'Processing...' }}</span>
+          <span id="progress-pct-text-{{ m.id }}">{{ m.progressPct or 20 }}%</span>
+        </div>
+      </div>
+
+      <!-- Failed Card Notice & Retry Button -->
+      {% if m.status == 'failed' %}
+      <div class="failed-card-notice" id="failed-notice-{{ m.id }}">
+        <div style="font-size: 12px; color: var(--error);">
+          ⚠️ {{ m.statusDetail or 'Pipeline interrupted.' }}
+        </div>
+        <button class="btn btn-secondary btn-sm retry-btn" data-id="{{ m.id }}" style="margin-top: 6px;">
+          🔄 Retry
+        </button>
+      </div>
+      {% endif %}
+
+      <!-- Meeting Title & Date -->
+      <div style="margin-top: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+          <span style="font-size: 12px; color: var(--text-subtle);">{{ m.meetingDate }}</span>
+          <span style="font-size: 12px; color: var(--text-muted);">{{ m.durationFormatted }}</span>
+        </div>
+
+        <h4 class="card-title">
+          <a href="{{ url_for('meeting_detail', meeting_id=m.id) }}" class="card-title-link" id="card-title-link-{{ m.id }}">
+            {{ m.title }}
+          </a>
+        </h4>
+
+        <!-- Micro-Label for Summary -->
+        <span class="card-micro-label">Executive TL;DR</span>
+        <p class="card-summary">
+          {{ m.summary.tldr if m.summary else 'Transcript ready for analysis and querying.' }}
+        </p>
+
+        <!-- Tag Chips -->
+        <div class="card-tags-row" id="tags-row-{{ m.id }}">
+          {% for tg in m.tags %}
+          <span class="tag-chip">#{{ tg }}</span>
+          {% endfor %}
+        </div>
+
+        <!-- Micro-Label for Speakers -->
+        <span class="card-micro-label">Active Participants</span>
+        <div class="speakers-row">
+          {% for spk in m.speakers %}
+          <span class="speaker-pill">
+            <span class="speaker-dot" style="background: {{ spk.color }};"></span>
+            {{ spk.displayName }}
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Footer: Decisions, Tasks & Details CTA -->
+      <div class="card-footer-row">
+        <div style="font-size: 12.5px; color: var(--text-subtle); display: flex; gap: 14px;">
+          <span id="card-decisions-count-{{ m.id }}">🎯 {{ m.decisions|length }} decision{{ '' if m.decisions|length == 1 else 's' }}</span>
+          <span id="card-tasks-count-{{ m.id }}">⚡ {{ m.tasks|length }} task{{ '' if m.tasks|length == 1 else 's' }}</span>
+        </div>
+        <a href="{{ url_for('meeting_detail', meeting_id=m.id) }}" class="btn btn-secondary btn-sm">
+          View Details →
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- =========================================================================
+     TOPIC 7: Recent Workspace Activity
+     ========================================================================= -->
+{% if activities %}
+<section class="topic-section glass-card" style="margin-top: 10px;">
+  <div class="topic-header">
+    <div class="topic-title">
+      <span>⏱️ Recent Workspace Activity</span>
+      <span class="badge badge-neutral">Audit Log</span>
+    </div>
+    <div class="topic-desc">Audit trail of recent transcript processing, decision logs, and meeting changes in local SQLite database.</div>
+  </div>
+
+  <div class="activity-items-list" style="margin-top: 14px;">
+    {% for act in activities %}
+    <div class="activity-item-row">
+      <div class="activity-bullet"></div>
+      <div style="flex: 1; font-size: 13px;">
+        <span style="color: var(--text-main); font-weight: 500;">{{ act.description }}</span>
+      </div>
+      <span style="font-size: 11.5px; color: var(--text-subtle);">{{ act.created_at[:10] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<!-- Rename Modal (Prompt 4) -->
+<div id="rename-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="rename-modal-title">
+  <div class="modal-content glass-card" style="max-width: 440px;">
+    <div class="modal-header">
+      <h3 id="rename-modal-title" style="font-size: 16px; font-weight: 700;">Rename Meeting</h3>
+      <button class="modal-close-btn" id="rename-modal-close">✕</button>
+    </div>
+    <div class="modal-body" style="margin-top: 14px;">
+      <input type="hidden" id="rename-meeting-id">
+      <label for="rename-input" style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">Meeting Title</label>
+      <input type="text" id="rename-input" class="toolbar-input" style="width: 100%;">
+    </div>
+    <div class="modal-footer" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px;">
+      <button class="btn btn-secondary btn-sm" id="rename-cancel-btn">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="rename-save-btn">Save Title</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Tags Modal (Prompt 4) -->
+<div id="tags-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="tags-modal-title">
+  <div class="modal-content glass-card" style="max-width: 480px;">
+    <div class="modal-header">
+      <h3 id="tags-modal-title" style="font-size: 16px; font-weight: 700;">Edit Meeting Tags</h3>
+      <button class="modal-close-btn" id="tags-modal-close">✕</button>
+    </div>
+    <div class="modal-body" style="margin-top: 14px;">
+      <input type="hidden" id="tags-meeting-id">
+      <label for="tags-input" style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">
+        Tags (comma-separated, max 8 tags, automatically trimmed and lowercased)
+      </label>
+      <input type="text" id="tags-input" class="toolbar-input" style="width: 100%;" placeholder="e.g. sprint-review, q3-planning, client">
+      
+      <div style="margin-top: 12px;">
+        <span style="font-size: 11.5px; color: var(--text-subtle);">Popular suggestions:</span>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;" id="tags-suggestions-box">
+          <span class="suggestion-chip" data-tag="engineering">+ engineering</span>
+          <span class="suggestion-chip" data-tag="client">+ client</span>
+          <span class="suggestion-chip" data-tag="planning">+ planning</span>
+          <span class="suggestion-chip" data-tag="review">+ review</span>
+          <span class="suggestion-chip" data-tag="architecture">+ architecture</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px;">
+      <button class="btn btn-secondary btn-sm" id="tags-cancel-btn">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="tags-save-btn">Save Tags</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal (Prompt 4) -->
+<div id="delete-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+  <div class="modal-content glass-card" style="max-width: 460px;">
+    <div class="modal-header">
+      <h3 id="delete-modal-title" style="font-size: 16px; font-weight: 700; color: var(--error);">Delete Meeting</h3>
+      <button class="modal-close-btn" id="delete-modal-close">✕</button>
+    </div>
+    <div class="modal-body" style="margin-top: 14px;">
+      <input type="hidden" id="delete-meeting-id">
+      <p style="font-size: 13.5px; line-height: 1.5; color: var(--text-main);">
+        Are you sure you want to permanently delete <strong id="delete-meeting-name"></strong>?
+      </p>
+      <p style="font-size: 12.5px; color: var(--error); margin-top: 10px; background: var(--error-bg); padding: 10px; border-radius: var(--radius-sm);">
+        ⚠️ Transcripts, audio files, extracted decisions, and tasks will be permanently removed.
+      </p>
+    </div>
+    <div class="modal-footer" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px;">
+      <button class="btn btn-secondary btn-sm" id="delete-cancel-btn">Cancel</button>
+      <button class="btn btn-error btn-sm" id="delete-confirm-btn">Yes, Permanently Delete</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

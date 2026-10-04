@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+
+{% block page_title %}Type & Process Meeting{% endblock %}
+{% block page_heading %}Type, Dictate & Process Meeting{% endblock %}
+
+{% block content %}
+<div style="max-width: 960px; margin: 0 auto;">
+  <div class="glass-card" style="margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+      <div>
+        <h3 style="font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">Meeting Transcript & Pipeline Processing</h3>
+        <p style="font-size: 13px; color: var(--text-muted);">
+          Type or dictate your meeting transcript directly, or upload recorded audio. The AI pipeline extracts decisions, commitment strengths, coaching scorecards, and action items.
+        </p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" id="tab-btn-text" class="btn btn-primary btn-sm" onclick="switchInputMode('text')">
+          ✍️ Type / Dictate Transcript
+        </button>
+        <button type="button" id="tab-btn-audio" class="btn btn-secondary btn-sm" onclick="switchInputMode('audio')">
+          📁 Upload Audio File
+        </button>
+      </div>
+    </div>
+
+    <!-- Stepper Graphic -->
+    <div class="stepper-container" style="margin-bottom: 24px;">
+      <div class="stepper-step" id="step-1">
+        <div class="step-circle active">1</div>
+        <div class="step-label">Transcription & Diarization<br><span style="font-size: 10px; color: var(--accent);">{{ config_info.transcribe_model }}</span></div>
+      </div>
+      <div class="stepper-step" id="step-2">
+        <div class="step-circle">2</div>
+        <div class="step-label">Vector Embeddings<br><span style="font-size: 10px; color: var(--accent);">{{ config_info.embedding_model }}</span></div>
+      </div>
+      <div class="stepper-step" id="step-3">
+        <div class="step-circle">3</div>
+        <div class="step-label">Reasoning & Extraction<br><span style="font-size: 10px; color: var(--accent);">{{ config_info.chat_model }}</span></div>
+      </div>
+      <div class="stepper-step" id="step-4">
+        <div class="step-circle">4</div>
+        <div class="step-label">Critic & Accountability<br><span style="font-size: 10px; color: var(--success);">Quote Verification</span></div>
+      </div>
+    </div>
+
+    <form id="upload-form" method="POST" action="{{ url_for('api_upload') }}" enctype="multipart/form-data">
+      <!-- Title & Type -->
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 18px;">
+        <div>
+          <label style="display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px;">
+            Meeting Title *
+          </label>
+          <input type="text" name="title" id="meeting-title-input" required value="Product Architecture & Sprint Review" placeholder="e.g. Q3 Architecture Review & Roadmap" style="width: 100%; padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); color: var(--text-main); font-size: 14px;">
+        </div>
+        <div>
+          <label style="display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px;">
+            Meeting Type
+          </label>
+          <select name="meetingType" style="width: 100%; padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); color: var(--text-main); font-size: 14px;">
+            <option value="planning" selected>Planning & Architecture</option>
+            <option value="client_call">Client Call</option>
+            <option value="standup">Standup</option>
+            <option value="interview">Interview</option>
+            <option value="retro">Retrospective</option>
+            <option value="general">General Meeting</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- MODE 1: Direct Transcript Typing & Voice Dictation (STT) -->
+      <div id="mode-text-container" style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <label style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">
+            Meeting Transcript (Type, Dictate or Paste Below)
+          </label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <!-- Speech-to-Text Voice Dictation Button -->
+            <button type="button" id="dictate-btn" class="btn btn-secondary btn-sm" style="border-color: #6366f1; color: #a5b4fc;">
+              🎙️ Dictate with Mic (STT)
+            </button>
+            <!-- Sample Transcript Insert Button -->
+            <button type="button" id="insert-sample-btn" class="btn btn-secondary btn-sm">
+              📋 Insert Sample
+            </button>
+            <button type="button" id="clear-transcript-btn" class="btn btn-ghost btn-sm">
+              🧹 Clear
+            </button>
+          </div>
+        </div>
+
+        <div id="dictation-indicator" style="display: none; padding: 8px 12px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: var(--radius-md); margin-bottom: 10px; font-size: 12.5px; color: #c7d2fe; display: none; align-items: center; gap: 8px;">
+          <span class="rec-pulse"></span>
+          <strong>Speech-to-Text Listening:</strong> Speak clearly into your microphone — your spoken words will appear in the box below...
+        </div>
+
+        <textarea name="transcript_text" id="transcript-textarea" rows="12" placeholder="Type or dictate your transcript here...&#10;&#10;Format example:&#10;Alex Rivera: Good morning everyone, let's review the caching layer architecture.&#10;Elena Rostova: I benchmarked Redis against Memcached, and Redis reduced query latency by 45%.&#10;Jordan Hayes: I agree. I will finalize the Redis cluster configuration by Friday 5 PM.&#10;Alex Rivera: Perfect. Can we support 50,000 concurrent websocket connections?&#10;Elena Rostova: Yes, with our horizontal autoscaling we validated up to 75,000 concurrent sockets." style="width: 100%; padding: 14px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); color: var(--text-main); font-size: 13.5px; font-family: 'JetBrains Mono', Consolas, monospace; line-height: 1.6; resize: vertical;"></textarea>
+        <span style="font-size: 11.5px; color: var(--text-subtle); margin-top: 4px; display: block;">
+          Tip: You can use "Speaker: dialogue" format to automatically assign speaker turns and compute coaching scorecards.
+        </span>
+      </div>
+
+      <!-- MODE 2: Audio File Upload -->
+      <div id="mode-audio-container" style="display: none; margin-bottom: 20px;">
+        <label style="display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px;">
+          Select Audio or Video Recording
+        </label>
+        <div style="border: 2px dashed var(--border-subtle); border-radius: var(--radius-lg); padding: 32px 20px; text-align: center; background: rgba(255, 255, 255, 0.02);">
+          <div style="font-size: 32px; margin-bottom: 8px;">📁</div>
+          <p style="font-size: 13.5px; font-weight: 600; color: var(--text-main); margin-bottom: 4px;">Choose an audio or video file</p>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Supports MP3, WAV, M4A, MP4, WebM (up to 500MB)</p>
+          <input type="file" name="audio_file" id="audio-file-input" accept=".mp3,.wav,.m4a,.mp4,.webm,.txt" style="display: inline-block; font-size: 13px; color: var(--text-muted);">
+        </div>
+      </div>
+
+      <!-- Optional Agenda Text (Prompt F) -->
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px;">
+          Planned Agenda Items (Optional — for Agenda Adherence Scoring)
+        </label>
+        <textarea name="agenda_text" rows="3" placeholder="Review API benchmarks&#10;Finalize Redis caching layer decision&#10;Discuss WebSocket scalability" style="width: 100%; padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); color: var(--text-main); font-size: 13px; line-height: 1.5;"></textarea>
+        <span style="font-size: 11.5px; color: var(--text-subtle); margin-top: 4px; display: block;">Enter one agenda item per line. The AI will verify which topics were discussed and how many minutes were spent on each.</span>
+      </div>
+
+      <!-- Bottom Controls -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 18px; flex-wrap: wrap; gap: 12px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); cursor: pointer;">
+          <input type="checkbox" name="confidential" value="true"> Enable Confidential Mode (Auto-redact PII)
+        </label>
+        <button type="submit" id="submit-btn" class="btn btn-primary" style="padding: 11px 24px; font-size: 14px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Run Full AI Pipeline
+        </button>
+      </div>
+    </form>
+
+    <!-- Processing Animation Status -->
+    <div id="processing-status" style="display: none; margin-top: 24px; padding: 20px; background: rgba(99, 102, 241, 0.08); border: 1px solid var(--primary-glow); border-radius: var(--radius-md);">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 24px; height: 24px; border: 3px solid var(--primary); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <div>
+          <h4 style="font-size: 14px; font-weight: 700; color: var(--text-main);" id="status-text">Analyzing transcript and segmenting speaker turns...</h4>
+          <p style="font-size: 12px; color: var(--text-muted);" id="status-subtext">Executing multi-stage analysis pipeline.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<script>
+function switchInputMode(mode) {
+  const textContainer = document.getElementById('mode-text-container');
+  const audioContainer = document.getElementById('mode-audio-container');
+  const btnText = document.getElementById('tab-btn-text');
+  const btnAudio = document.getElementById('tab-btn-audio');
+
+  if (mode === 'text') {
+    textContainer.style.display = 'block';
+    audioContainer.style.display = 'none';
+    btnText.className = 'btn btn-primary btn-sm';
+    btnAudio.className = 'btn btn-secondary btn-sm';
+  } else {
+    textContainer.style.display = 'none';
+    audioContainer.style.display = 'block';
+    btnText.className = 'btn btn-secondary btn-sm';
+    btnAudio.className = 'btn btn-primary btn-sm';
+  }
+}
+
+// Sample transcript insert
+document.getElementById('insert-sample-btn')?.addEventListener('click', () => {
+  const textarea = document.getElementById('transcript-textarea');
+  textarea.value = `Alex Rivera: Welcome everyone to our Phase 2 architecture sync. Today we need to lock in the caching decision and agree on the load testing roadmap.
+Elena Rostova: I benchmarked Redis against Memcached on our production staging cluster. Redis reduced p99 query latency from 85 milliseconds down to 42 milliseconds, a 45 percent improvement.
+Jordan Hayes: That aligns with our frontend responsiveness goals. I will finalize the Redis cluster configuration by Friday 5 PM.
+Alex Rivera: Perfect. Can we support 50,000 concurrent websocket connections during our Q3 customer rollout?
+Elena Rostova: Yes, with our horizontal autoscaling pods we tested up to 75,000 concurrent sockets without degradation.
+Marcus Brody: I think maybe someone should check the database connection pooling limits at some point before launch.
+Alex Rivera: Good catch. Marcus, please review connection limits by next Tuesday. Let's record the decision to adopt Redis as approved.`;
+  showToast('Sample transcript inserted!', 'info');
+});
+
+// Clear transcript
+document.getElementById('clear-transcript-btn')?.addEventListener('click', () => {
+  const textarea = document.getElementById('transcript-textarea');
+  textarea.value = '';
+});
+
+// Speech-to-Text Voice Dictation with Microphone
+const dictateBtn = document.getElementById('dictate-btn');
+const textarea = document.getElementById('transcript-textarea');
+const dictationIndicator = document.getElementById('dictation-indicator');
+
+let recognition = null;
+let isDictating = false;
+
+if (dictateBtn && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRec();
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+
+  recognition.onstart = () => {
+    isDictating = true;
+    dictateBtn.innerHTML = '🛑 Stop Listening';
+    dictateBtn.style.borderColor = '#ef4444';
+    dictateBtn.style.color = '#ef4444';
+    dictationIndicator.style.display = 'flex';
+  };
+
+  recognition.onresult = (event) => {
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        const text = event.results[i][0].transcript.trim();
+        if (text) {
+          const current = textarea.value;
+          const prefix = (current.length > 0 && !current.endsWith('\n')) ? '\n' : '';
+          textarea.value = current + prefix + 'Speaker: ' + text + '\n';
+          textarea.scrollTop = textarea.scrollHeight;
+        }
+      }
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.warn('SpeechRecognition error:', e);
+    stopDictation();
+  };
+
+  recognition.onend = () => {
+    stopDictation();
+  };
+
+  function stopDictation() {
+    isDictating = false;
+    dictateBtn.innerHTML = '🎙️ Dictate with Mic (STT)';
+    dictateBtn.style.borderColor = '#6366f1';
+    dictateBtn.style.color = '#a5b4fc';
+    dictationIndicator.style.display = 'none';
+  }
+
+  dictateBtn.addEventListener('click', () => {
+    if (isDictating) {
+      recognition.stop();
+      stopDictation();
+    } else {
+      try {
+        recognition.start();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  });
+} else if (dictateBtn) {
+  dictateBtn.title = 'Speech-to-Text requires Chrome, Edge or Safari';
+  dictateBtn.addEventListener('click', () => {
+    alert('Speech-to-text dictation requires a browser with Web Speech API support (Google Chrome or Microsoft Edge recommended).');
+  });
+}
+
+// Processing submit animation
+document.getElementById('upload-form').addEventListener('submit', (e) => {
+  const submitBtn = document.getElementById('submit-btn');
+  const statusDiv = document.getElementById('processing-status');
+  const statusText = document.getElementById('status-text');
+  const statusSubtext = document.getElementById('status-subtext');
+
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = 'Processing Pipeline...';
+  statusDiv.style.display = 'block';
+
+  let step = 1;
+  setInterval(() => {
+    step++;
+    if (step === 2) {
+      document.querySelector('#step-2 .step-circle').classList.add('active');
+      document.querySelector('#step-1 .step-circle').classList.add('completed');
+      statusText.textContent = 'Generating dense vector embeddings for RAG...';
+      statusSubtext.textContent = 'Vectorizing transcript chunks with {{ config_info.embedding_model }}';
+    } else if (step === 3) {
+      document.querySelector('#step-3 .step-circle').classList.add('active');
+      document.querySelector('#step-2 .step-circle').classList.add('completed');
+      statusText.textContent = 'Extracting decisions, commitment strengths & coaching scorecards...';
+      statusSubtext.textContent = 'Reasoning with {{ config_info.chat_model }}';
+    } else if (step === 4) {
+      document.querySelector('#step-4 .step-circle').classList.add('active');
+      document.querySelector('#step-3 .step-circle').classList.add('completed');
+      statusText.textContent = 'Performing anti-hallucination critic verification...';
+      statusSubtext.textContent = 'Cross-referencing quotes against verbatim transcript';
+    }
+  }, 1200);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block page_title %}Recurring Issues Radar{% endblock %}
+{% block page_title_inner %}Cross-Meeting Intelligence: Recurring Issues Radar{% endblock %}
+
+{% block content %}
+<div class="radar-page-wrapper" style="display: flex; flex-direction: column; gap: 20px;">
+  
+  <!-- Header Card & Summary -->
+  <div class="card" style="padding: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
+      <div>
+        <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 6px;">Multi-Meeting Blocker & Risk Radar</h2>
+        <p style="font-size: 13px; color: var(--text-muted); max-width: 680px;">
+          Automatically detects and tracks systemic issues, unaddressed questions, and recurring blockers across multiple meetings using dense embeddings similarity clustering.
+        </p>
+      </div>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 12px; padding: 6px 12px;">
+          {{ issues|length }} Systemic Recurring Issues
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Issues Table / Cards -->
+  <div style="display: flex; flex-direction: column; gap: 16px;">
+    {% if not issues %}
+      <div class="card" style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
+        <div style="font-size: 36px; margin-bottom: 12px;">🛡️</div>
+        <p style="font-size: 15px; font-weight: 600; color: var(--text-main);">No Multi-Meeting Recurring Issues Detected</p>
+        <p style="font-size: 13px; margin-top: 6px;">Issues must appear in 2 or more separate meetings to be flagged on the systemic radar.</p>
+      </div>
+    {% else %}
+      {% for issue in issues %}
+      <div class="card" style="padding: 20px; border-left: 4px solid {% if issue.days_unresolved > 14 %}#ef4444{% elif issue.days_unresolved > 7 %}#f59e0b{% else %}#3b82f6{% endif %};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 12px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+              <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; font-weight: 700;">
+                Appeared in {{ issue.meetings_count }} Meetings
+              </span>
+              <span class="badge" style="background: rgba(255, 255, 255, 0.06); color: var(--text-muted);">
+                First seen {{ issue.first_seen }} ({{ issue.days_unresolved }} days active)
+              </span>
+              {% if issue.task_resolved %}
+                <span class="badge badge-success">✓ Related Task Done</span>
+              {% else %}
+                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">Unresolved Blocker</span>
+              {% endif %}
+            </div>
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main);">{{ issue.title }}</h3>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 11px; color: var(--text-subtle);">Last Mentioned</div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">{{ issue.last_seen }}</div>
+          </div>
+        </div>
+
+        <!-- Evidence List Across Meetings -->
+        <div style="margin-top: 14px; background: var(--bg-surface-elevated); border-radius: var(--radius-md); padding: 14px; border: 1px solid var(--border-subtle);">
+          <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">
+            Auditable Evidence from Meeting Transcripts:
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            {% for ev in issue.evidence %}
+            <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-main);">
+              <span style="color: var(--accent); font-weight: 600; min-width: 140px;">
+                <a href="{{ url_for('meeting_detail', meeting_id=ev.meeting_id) }}" style="color: var(--accent); text-decoration: none;">
+                  {{ ev.meeting_title or ev.meeting_id }}
+                </a>
+              </span>
+              <span style="color: var(--text-muted);">
+                "{{ ev.quote }}" 
+                <span style="font-size: 11px; color: var(--text-subtle);">— {{ ev.speaker or 'Speaker' }}</span>
+              </span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
